@@ -5,4 +5,4 @@
 - Keep subject-specific assets, pack orchestration, and one-off production logic out of this repository.
 - Resolve scripts and references relative to `skills/animated-sticker-maker/SKILL.md`.
 - Preserve transactional packaging, artifact fingerprints, and the separate `technical_validation` / `visual_validation` gates.
-- Run `python -m py_compile skills/animated-sticker-maker/scripts/*.py`, `python -m unittest discover -s skills/animated-sticker-maker/tests -v`, and `git diff --check` before committing.
+- Run `python -m py_compile skills/animated-sticker-maker/scripts/*.py`, `python -m unittest discover -s tests -v`, and `git diff --check` before committing.

@@ -105,7 +105,7 @@ Skill 会基于自身 `SKILL.md` 所在目录解析以下脚本：
 ```bash
 python -m pip install -r skills/animated-sticker-maker/requirements.txt
 python -m py_compile skills/animated-sticker-maker/scripts/*.py
-python -m unittest discover -s skills/animated-sticker-maker/tests -v
+python -m unittest discover -s tests -v
 ```
 
 测试覆盖打包、动作 schema、Alpha、产物指纹、视觉校验失效、GIF 自适应导出和失败安全性。

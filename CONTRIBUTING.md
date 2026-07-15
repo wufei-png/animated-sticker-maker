@@ -13,7 +13,7 @@ The repository intentionally maintains one Agent Skills instruction format. Put 
 ```bash
 python -m pip install -r skills/animated-sticker-maker/requirements.txt
 python -m py_compile skills/animated-sticker-maker/scripts/*.py
-python -m unittest discover -s skills/animated-sticker-maker/tests -v
+python -m unittest discover -s tests -v
 ```
 
 ## Pull requests

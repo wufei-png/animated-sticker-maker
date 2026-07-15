@@ -38,6 +38,7 @@ jobs:
           test -f "$installed/SKILL.md"
           test -f "$installed/references/validation.md"
           test -f "$installed/scripts/package_sticker.py"
+          test ! -e "$installed/tests"
           diff -u skills/animated-sticker-maker/SKILL.md "$installed/SKILL.md"
 
   python:
@@ -68,4 +69,4 @@ jobs:
       - name: Compile scripts
         run: python -m py_compile skills/animated-sticker-maker/scripts/*.py
       - name: Run tests
-        run: python -m unittest discover -s skills/animated-sticker-maker/tests -v
+        run: python -m unittest discover -s tests -v

@@ -105,7 +105,7 @@ Platform limits drift. When a platform is named, verify its current official spe
 ```bash
 python -m pip install -r skills/animated-sticker-maker/requirements.txt
 python -m py_compile skills/animated-sticker-maker/scripts/*.py
-python -m unittest discover -s skills/animated-sticker-maker/tests -v
+python -m unittest discover -s tests -v
 ```
 
 The test suite exercises packaging, schema validation, Alpha handling, artifact fingerprints, visual-validation invalidation, adaptive GIF export, and failure safety.

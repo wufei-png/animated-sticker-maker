@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here.
 
+## [0.8.1] - 2026-07-16
+
+- Keep development-only tests outside the installable Skill so `npx skills add` and ClawHub distribute only runtime files.
+
 ## [0.8.0] - 2026-07-16
 
 - Publish the generic single-sticker workflow as a standalone Agent Skills repository.
