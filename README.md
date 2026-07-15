@@ -25,9 +25,9 @@ The Skill keeps creative decisions and deterministic production in one workflow:
 - An agent host that supports the [Agent Skills specification](https://agentskills.io/specification).
 - A host-native raster image generation or editing capability that can use the reference image and preserve identity.
 - Python 3.10 or newer for the deterministic scripts.
-- The Python packages listed in [`requirements.txt`](requirements.txt).
+- The Python packages listed in [`skills/animated-sticker-maker/requirements.txt`](skills/animated-sticker-maker/requirements.txt).
 
-This repository maintains one portable `SKILL.md`. [`agents/openai.yaml`](agents/openai.yaml) is optional OpenAI interface metadata; it does not duplicate or redefine the workflow.
+This repository maintains one portable [`SKILL.md`](skills/animated-sticker-maker/SKILL.md). [`agents/openai.yaml`](skills/animated-sticker-maker/agents/openai.yaml) is optional OpenAI interface metadata; it does not duplicate or redefine the workflow.
 
 ## Install
 
@@ -49,7 +49,7 @@ To inspect the discovered skill before installing:
 npx skills add wufei-png/animated-sticker-maker --list
 ```
 
-The repository root is the skill package. No npm package or host-specific second copy is required.
+The installable package lives at `skills/animated-sticker-maker/`. No npm package or host-specific second copy is required.
 
 `npx skills add` copies the Skill but does not create a Python environment. Install the deterministic runtime dependencies in the environment used by your agent host:
 
@@ -103,9 +103,9 @@ Platform limits drift. When a platform is named, verify its current official spe
 ## Local development
 
 ```bash
-python -m pip install -r requirements.txt
-python -m py_compile scripts/*.py
-python -m unittest discover -s tests -v
+python -m pip install -r skills/animated-sticker-maker/requirements.txt
+python -m py_compile skills/animated-sticker-maker/scripts/*.py
+python -m unittest discover -s skills/animated-sticker-maker/tests -v
 ```
 
 The test suite exercises packaging, schema validation, Alpha handling, artifact fingerprints, visual-validation invalidation, adaptive GIF export, and failure safety.
@@ -114,7 +114,7 @@ The test suite exercises packaging, schema validation, Alpha handling, artifact 
 
 This repository owns the generic single-sticker workflow. Character identities, pack ordering, release naming, platform account setup, and one-off production logic belong in the project that owns those assets, not in this Skill.
 
-See [`SKILL.md`](SKILL.md) for the complete agent contract and [`CONTRIBUTING.md`](CONTRIBUTING.md) for contribution guidance.
+See [`SKILL.md`](skills/animated-sticker-maker/SKILL.md) for the complete agent contract and [`CONTRIBUTING.md`](CONTRIBUTING.md) for contribution guidance.
 
 ## License
 

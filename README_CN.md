@@ -25,9 +25,9 @@
 - 支持 [Agent Skills 规范](https://agentskills.io/specification)的 agent host。
 - host 提供可结合参考图、保持主体一致性的栅格图像生成或编辑能力。
 - Python 3.10 或更高版本，用于确定性脚本。
-- [`requirements.txt`](requirements.txt) 中列出的 Python 依赖。
+- [`skills/animated-sticker-maker/requirements.txt`](skills/animated-sticker-maker/requirements.txt) 中列出的 Python 依赖。
 
-仓库只维护一份可移植的 `SKILL.md`。[`agents/openai.yaml`](agents/openai.yaml) 只是可选的 OpenAI 界面元数据，不会复制或改写工作流。
+仓库只维护一份可移植的 [`SKILL.md`](skills/animated-sticker-maker/SKILL.md)。[`agents/openai.yaml`](skills/animated-sticker-maker/agents/openai.yaml) 只是可选的 OpenAI 界面元数据，不会复制或改写工作流。
 
 ## 安装
 
@@ -49,7 +49,7 @@ npx skills add wufei-png/animated-sticker-maker -g -y --agent codex
 npx skills add wufei-png/animated-sticker-maker --list
 ```
 
-仓库根目录就是 Skill 包；不需要发布 npm 包，也不需要维护第二份 host 专用格式。
+可安装的 Skill 包位于 `skills/animated-sticker-maker/`；不需要发布 npm 包，也不需要维护第二份 host 专用格式。
 
 `npx skills add` 只复制 Skill，不会创建 Python 环境。请在 agent host 实际使用的环境中安装确定性脚本依赖：
 
@@ -103,9 +103,9 @@ Skill 会基于自身 `SKILL.md` 所在目录解析以下脚本：
 ## 本地开发
 
 ```bash
-python -m pip install -r requirements.txt
-python -m py_compile scripts/*.py
-python -m unittest discover -s tests -v
+python -m pip install -r skills/animated-sticker-maker/requirements.txt
+python -m py_compile skills/animated-sticker-maker/scripts/*.py
+python -m unittest discover -s skills/animated-sticker-maker/tests -v
 ```
 
 测试覆盖打包、动作 schema、Alpha、产物指纹、视觉校验失效、GIF 自适应导出和失败安全性。
@@ -114,7 +114,7 @@ python -m unittest discover -s tests -v
 
 这个仓库只负责通用的单张动态表情制作流程。角色身份、整包排序、发布命名、平台账号配置和一次性生产逻辑应留在素材所属项目中，不应塞进通用 Skill。
 
-完整 agent 契约见 [`SKILL.md`](SKILL.md)，贡献说明见 [`CONTRIBUTING.md`](CONTRIBUTING.md)。
+完整 agent 契约见 [`SKILL.md`](skills/animated-sticker-maker/SKILL.md)，贡献说明见 [`CONTRIBUTING.md`](CONTRIBUTING.md)。
 
 ## 许可证
 

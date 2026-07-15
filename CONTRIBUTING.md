@@ -6,14 +6,14 @@ Thanks for helping improve Animated Sticker Maker.
 
 Changes should strengthen the generic one-reference, one-prompt, one-sticker workflow. Keep character-specific assets, pack orchestration, account setup, and platform campaign decisions in their owning projects.
 
-The repository intentionally maintains one Agent Skills instruction format. Put portable workflow rules in `SKILL.md`; keep `agents/openai.yaml` limited to optional interface metadata.
+The repository intentionally maintains one Agent Skills instruction format. Put portable workflow rules in `skills/animated-sticker-maker/SKILL.md`; keep its `agents/openai.yaml` limited to optional interface metadata.
 
 ## Development setup
 
 ```bash
-python -m pip install -r requirements.txt
-python -m py_compile scripts/*.py
-python -m unittest discover -s tests -v
+python -m pip install -r skills/animated-sticker-maker/requirements.txt
+python -m py_compile skills/animated-sticker-maker/scripts/*.py
+python -m unittest discover -s skills/animated-sticker-maker/tests -v
 ```
 
 ## Pull requests

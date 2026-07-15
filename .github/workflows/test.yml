@@ -22,14 +22,15 @@ jobs:
           node-version: "22"
       - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
       - name: Validate Agent Skills specification
-        run: uvx --from skills-ref==0.1.1 agentskills validate "${{ github.workspace }}"
+        run: uvx --from skills-ref==0.1.1 agentskills validate "${{ github.workspace }}/skills/animated-sticker-maker"
       - name: Verify skills CLI discovery and isolated install
         env:
           CI: "true"
+          NO_COLOR: "1"
         run: |
           listing=$(npx --yes skills@1.5.17 add "${{ github.workspace }}" --list)
           printf '%s\n' "$listing"
-          printf '%s\n' "$listing" | grep -q "Found 1 skill"
+          printf '%s\n' "$listing" | grep -Fq "Found 1 skill"
           printf '%s\n' "$listing" | grep -q "animated-sticker-maker"
           isolated_home=$(mktemp -d)
           HOME="$isolated_home" npx --yes skills@1.5.17 add "${{ github.workspace }}" -g -y --agent codex --copy
@@ -37,7 +38,7 @@ jobs:
           test -f "$installed/SKILL.md"
           test -f "$installed/references/validation.md"
           test -f "$installed/scripts/package_sticker.py"
-          diff -u SKILL.md "$installed/SKILL.md"
+          diff -u skills/animated-sticker-maker/SKILL.md "$installed/SKILL.md"
 
   python:
     name: Python ${{ matrix.python }} / Pillow ${{ matrix.pillow }}
@@ -61,10 +62,10 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
           cache: pip
-          cache-dependency-path: requirements.txt
+          cache-dependency-path: skills/animated-sticker-maker/requirements.txt
       - name: Install dependencies
         run: python -m pip install "${{ matrix.pillow }}" "numpy>=1.24"
       - name: Compile scripts
-        run: python -m py_compile scripts/*.py
+        run: python -m py_compile skills/animated-sticker-maker/scripts/*.py
       - name: Run tests
-        run: python -m unittest discover -s tests -v
+        run: python -m unittest discover -s skills/animated-sticker-maker/tests -v
