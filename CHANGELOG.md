@@ -12,6 +12,7 @@ All notable changes to this project are documented here.
 - Add a synthetic golden workflow fixture covering keyframe and render-track exports plus invalidation chains.
 - Add one offline HTML review generator for package, render-track, and export reports.
 - Make Review Page playback control the actual decoded WebP/GIF target, move semantic hold to timeline evidence, and pair true-size with zoomed 50×50 inspection.
+- Add agent-selected Chinese/English Review Page localization and explain the semantic-hold marker inline.
 - Remove unused cover artwork and consolidate repeated integrity helpers.
 
 ## [0.8.1] - 2026-07-16

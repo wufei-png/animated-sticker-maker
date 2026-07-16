@@ -17,6 +17,7 @@ from PIL import Image
 from artifact_integrity import safe_relative_file, sha256_path
 from media_validation import webp_animation_durations
 from motion_schema import validate_motion
+from review_i18n import language_text
 from review_template import render_review_html
 from validation_integrity import validate_report_binding, validate_report_state
 
@@ -133,6 +134,7 @@ def resolve_reference(
     motion: dict[str, object],
     output_dir: Path,
     reference_image: Path | None,
+    text: dict[str, object],
 ) -> dict[str, object]:
     source = package / "source"
     metadata_path = source / "reference.json"
@@ -170,7 +172,9 @@ def resolve_reference(
         with Image.open(path) as image:
             image.load()
         src = relative_media_url(path, output_dir)
-        source_kind = "Included package reference"
+        reference_labels = text["reference_labels"]
+        assert isinstance(reference_labels, dict)
+        source_kind = reference_labels["included"]
     else:
         if reference_image is None:
             raise ValueError(
@@ -185,7 +189,9 @@ def resolve_reference(
                 "--reference-image does not match the package reference SHA-256"
             )
         src = image_data_uri(path)
-        source_kind = "Verified external reference"
+        reference_labels = text["reference_labels"]
+        assert isinstance(reference_labels, dict)
+        source_kind = reference_labels["external"]
 
     return {
         "src": src,
@@ -238,6 +244,7 @@ def encoded_frame_records(
     package: Path,
     *,
     format_label: str,
+    description_template: str,
 ) -> list[dict[str, object]]:
     with Image.open(path) as image:
         frame_count = getattr(image, "n_frames", 1)
@@ -275,8 +282,8 @@ def encoded_frame_records(
                     "src": png_data_uri(image.convert("RGBA")),
                     "path": f"{display_path}#frame={index + 1}",
                     "duration_ms": duration,
-                    "description": (
-                        f"Decoded frame from the actual {format_label} artifact"
+                    "description": description_template.format(
+                        format_label=format_label
                     ),
                 }
             )
@@ -379,6 +386,7 @@ def build_technical_details(
     main_path: Path | None,
     preview_path: Path | None,
     reference: dict[str, object],
+    text: dict[str, object],
 ) -> dict[str, object]:
     technical = report["technical_validation"]
     assert isinstance(technical, dict)
@@ -389,66 +397,123 @@ def build_technical_details(
     canvas = report.get("canvas")
     if not isinstance(canvas, list):
         canvas = motion["canvas"]
+    labels = text["technical_labels"]
+    file_roles = text["file_roles"]
+    status_labels = text["status_labels"]
+    boolean_labels = text["boolean_labels"]
+    assert isinstance(labels, dict)
+    assert isinstance(file_roles, dict)
+    assert isinstance(status_labels, dict)
+    assert isinstance(boolean_labels, dict)
+
+    def display_status(value: object) -> object:
+        return status_labels.get(value, value)
+
     summary: list[dict[str, object]] = [
-        {"label": "Artifact scope", "value": report["artifact_scope"]},
-        {"label": "Aggregate status", "value": report["status"]},
-        {"label": "Technical", "value": technical["status"]},
-        {"label": "Visual", "value": visual["status"]},
+        {"label": labels["artifact_scope"], "value": report["artifact_scope"]},
         {
-            "label": "Deliverable ready",
-            "value": str(report.get("deliverable_ready") is True).lower(),
+            "label": labels["aggregate_status"],
+            "value": display_status(report["status"]),
         },
         {
-            "label": "Canvas",
+            "label": labels["technical"],
+            "value": display_status(technical["status"]),
+        },
+        {
+            "label": labels["visual"],
+            "value": display_status(visual["status"]),
+        },
+        {
+            "label": labels["deliverable_ready"],
+            "value": boolean_labels[
+                str(report.get("deliverable_ready") is True).lower()
+            ],
+        },
+        {
+            "label": labels["canvas"],
             "value": " × ".join(str(value) for value in canvas),
         },
-        {"label": "Frame count", "value": report.get("frame_count")},
+        {"label": labels["frame_count"], "value": report.get("frame_count")},
         {
-            "label": "Total duration",
+            "label": labels["total_duration"],
             "value": (
                 f"{report.get('total_duration_ms')} ms"
                 if report.get("total_duration_ms") is not None
                 else None
             ),
         },
-        {"label": "Loop", "value": str(motion["loop"]).lower()},
-        {"label": "Resampling", "value": motion["resampling"]},
+        {
+            "label": labels["loop"],
+            "value": boolean_labels[str(motion["loop"]).lower()],
+        },
+        {"label": labels["resampling"], "value": motion["resampling"]},
     ]
     if report.get("artifact_scope") == "render_track":
         summary.append(
-            {"label": "Target FPS", "value": report.get("target_fps")}
+            {"label": labels["target_fps"], "value": report.get("target_fps")}
         )
     if report.get("artifact_scope") == "export_files":
         gif = report.get("gif")
         assert isinstance(gif, dict)
         summary.extend(
             [
-                {"label": "Platform", "value": report.get("platform")},
-                {"label": "Frame track", "value": report.get("frame_track")},
-                {"label": "GIF bytes", "value": gif.get("bytes")},
-                {"label": "GIF max bytes", "value": gif.get("max_bytes")},
-                {"label": "Palette colors", "value": gif.get("colors")},
-                {"label": "Selected FPS", "value": gif.get("selected_fps")},
-                {"label": "Verified on", "value": report.get("verified_on")},
+                {"label": labels["platform"], "value": report.get("platform")},
+                {
+                    "label": labels["frame_track"],
+                    "value": report.get("frame_track"),
+                },
+                {"label": labels["gif_bytes"], "value": gif.get("bytes")},
+                {
+                    "label": labels["gif_max_bytes"],
+                    "value": gif.get("max_bytes"),
+                },
+                {
+                    "label": labels["palette_colors"],
+                    "value": gif.get("colors"),
+                },
+                {
+                    "label": labels["selected_fps"],
+                    "value": gif.get("selected_fps"),
+                },
+                {
+                    "label": labels["verified_on"],
+                    "value": report.get("verified_on"),
+                },
             ]
         )
     summary = [item for item in summary if item["value"] not in {None, ""}]
 
     files = [
-        primary_file_record("Validation report", report_path, package),
         primary_file_record(
-            "Packaged motion",
+            str(file_roles["validation_report"]),
+            report_path,
+            package,
+        ),
+        primary_file_record(
+            str(file_roles["packaged_motion"]),
             package / "source" / "motion.json",
             package,
         ),
     ]
     if main_path is not None and main_path.is_file():
-        files.append(primary_file_record("Primary media", main_path, package))
+        files.append(
+            primary_file_record(
+                str(file_roles["primary_media"]),
+                main_path,
+                package,
+            )
+        )
     if preview_path is not None:
-        files.append(primary_file_record("Platform preview", preview_path, package))
+        files.append(
+            primary_file_record(
+                str(file_roles["platform_preview"]),
+                preview_path,
+                package,
+            )
+        )
     files.append(
         {
-            "role": "Reference image",
+            "role": file_roles["reference_image"],
             "path": str(reference.get("filename")),
             "sha256": reference.get("sha256"),
         }
@@ -470,7 +535,9 @@ def build_review_model(
     *,
     reference_image: Path | None,
     output_path: Path,
+    language: str = "en",
 ) -> dict[str, object]:
+    text = language_text(language)
     report, motion, package, source_report_path = validate_boundary(report_path)
     scope = str(report["artifact_scope"])
     output_dir = output_path.parent
@@ -485,6 +552,7 @@ def build_review_model(
         motion,
         output_dir,
         reference_image,
+        text,
     )
     authored = frame_records(
         motion["frames"],
@@ -507,6 +575,10 @@ def build_review_model(
     technical = report["technical_validation"]
     assert isinstance(technical, dict)
     technical_pass = technical.get("status") == "pass"
+    hero_text = text["hero"]
+    formats = text["formats"]
+    assert isinstance(hero_text, dict)
+    assert isinstance(formats, dict)
 
     main_path: Path | None = None
     preview_path: Path | None = None
@@ -521,29 +593,26 @@ def build_review_model(
             inspector = encoded_frame_records(
                 candidate,
                 package,
-                format_label="Animated WebP",
+                format_label=str(formats["webp"]),
+                description_template=str(
+                    text["decoded_frame_description"]
+                ),
             )
             inspector_kind = "encoded"
             auxiliary = authored
             hero = {
                 "mode": "sequence",
-                "title": "Encoded package",
-                "subtitle": (
-                    "Decoded frames from the actual sticker.webp artifact. "
-                    "The transport controls this post-encode result."
-                ),
-                "format": "Animated WebP",
+                "title": hero_text["package_title"],
+                "subtitle": hero_text["package_subtitle"],
+                "format": formats["webp"],
             }
         elif technical_pass:
             raise FileNotFoundError(f"validated sticker.webp is missing: {candidate}")
         else:
             hero = {
                 "mode": "missing",
-                "title": "Encoded package unavailable",
-                "subtitle": (
-                    "Technical validation failed before a usable sticker.webp "
-                    "was produced."
-                ),
+                "title": hero_text["package_missing_title"],
+                "subtitle": hero_text["package_missing_subtitle"],
             }
     elif scope == "render_track":
         if not rendered:
@@ -553,12 +622,9 @@ def build_review_model(
         auxiliary = authored
         hero = {
             "mode": "sequence",
-            "title": "Render track preview",
-            "subtitle": (
-                "Exact ordered render PNG frames and declared timing. "
-                "This is pre-encode evidence, not an encoded deliverable."
-            ),
-            "format": "Ordered render PNG sequence",
+            "title": hero_text["render_title"],
+            "subtitle": hero_text["render_subtitle"],
+            "format": formats["render"],
         }
     else:
         gif = report.get("gif")
@@ -582,7 +648,8 @@ def build_review_model(
         inspector = encoded_frame_records(
             main_path,
             package,
-            format_label="Animated GIF",
+            format_label=str(formats["gif"]),
+            description_template=str(text["decoded_frame_description"]),
         )
         inspector_kind = "encoded"
         auxiliary = source_track
@@ -595,12 +662,11 @@ def build_review_model(
             )
         hero = {
             "mode": "sequence",
-            "title": f"{report.get('platform')} export",
-            "subtitle": (
-                "Decoded frames from the actual exported GIF. "
-                "The transport controls this platform derivative."
+            "title": str(hero_text["export_title"]).format(
+                platform=report.get("platform")
             ),
-            "format": "Animated GIF",
+            "subtitle": hero_text["export_subtitle"],
+            "format": formats["gif"],
         }
 
     hold["primary_index"] = sequence_frame_at_time(
@@ -613,37 +679,32 @@ def build_review_model(
     notes = visual.get("notes")
     if not isinstance(notes, dict):
         notes = {}
+    prompt_labels = text["prompt_labels"]
+    assert isinstance(prompt_labels, dict)
     review_prompts = [
         {
             "id": field,
-            "label": field.replace("_", " ").title(),
+            "label": prompt_labels[field],
             "note": notes.get(field),
         }
         for field in REVIEW_FIELDS
     ]
 
+    scope_labels = text["scope_labels"]
+    scope_descriptions = text["scope_descriptions"]
+    inspector_labels = text["inspector_labels"]
+    auxiliary_labels = text["auxiliary_labels"]
+    assert isinstance(scope_labels, dict)
+    assert isinstance(scope_descriptions, dict)
+    assert isinstance(inspector_labels, dict)
+    assert isinstance(auxiliary_labels, dict)
     model = {
-        "schema_version": 2,
+        "schema_version": 3,
+        "language": language,
+        "text": text,
         "scope": scope,
-        "scope_label": {
-            "package_source": "Encoded artifact",
-            "render_track": "Pre-encode render track",
-            "export_files": "Encoded platform derivative",
-        }[scope],
-        "scope_description": {
-            "package_source": (
-                "Post-encode authority: inspect the actual packaged WebP; "
-                "authored frames are comparison evidence."
-            ),
-            "render_track": (
-                "Pre-encode evidence: inspect the ordered render PNG sequence "
-                "before packaging or platform encoding."
-            ),
-            "export_files": (
-                "Post-export authority: inspect the actual platform GIF; its "
-                "selected source track is comparison evidence."
-            ),
-        }[scope],
+        "scope_label": scope_labels[scope],
+        "scope_description": scope_descriptions[scope],
         "report_name": report_path.name,
         "report_path": str(report_path.resolve()),
         "report_status": report["status"],
@@ -655,13 +716,7 @@ def build_review_model(
         "reference": reference,
         "hero": hero,
         "inspector": {
-            "label": (
-                "Decoded encoded-artifact inspector"
-                if inspector_kind == "encoded"
-                else "Render track inspector"
-                if inspector_kind == "render"
-                else "Authored keyframe inspector"
-            ),
+            "label": inspector_labels[inspector_kind],
             "frames": inspector,
             "overview_indices": overview_indices(
                 len(inspector),
@@ -674,9 +729,9 @@ def build_review_model(
         },
         "auxiliary_frames": {
             "label": (
-                "Selected source-track comparison"
+                auxiliary_labels["export"]
                 if scope == "export_files"
-                else "Authored keyframe comparison"
+                else auxiliary_labels["authored"]
             ),
             "frames": auxiliary,
             "overview_indices": overview_indices(len(auxiliary))
@@ -687,12 +742,12 @@ def build_review_model(
             **hold,
         },
         "small_size": {
-            "label": "50 × 50 stress view",
+            "label": text["stress_title"],
         },
         "preview": (
             {
                 "src": relative_media_url(preview_path, output_dir),
-                "label": "Platform preview PNG",
+                "label": formats["preview"],
                 "frame": report["preview"].get("frame"),
             }
             if preview_path is not None and isinstance(report.get("preview"), dict)
@@ -707,6 +762,7 @@ def build_review_model(
             main_path,
             preview_path,
             reference,
+            text,
         ),
         "resampling": motion["resampling"],
     }
@@ -738,6 +794,7 @@ def generate_review(
     *,
     reference_image: Path | None = None,
     output: Path | None = None,
+    language: str = "en",
 ) -> Path:
     report_path = report.resolve()
     output_path = resolve_output_path(report_path, output)
@@ -745,6 +802,7 @@ def generate_review(
         report_path,
         reference_image=reference_image,
         output_path=output_path,
+        language=language,
     )
     write_atomic(output_path, render_review_html(model))
     return output_path

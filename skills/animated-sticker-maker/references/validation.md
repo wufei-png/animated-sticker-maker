@@ -20,9 +20,9 @@ Use `scripts/generate_review.py` when an exact report reaches visual validation 
 - `render_track` reviews the exact ordered render PNG sequence and clearly labels it as a frame-track preview rather than an encoded deliverable.
 - `export_files` reviews frames decoded from the actual exported GIF, its optional preview PNG, and the source track used for comparison.
 
-The primary transport always controls the current report target. The semantic hold remains motion metadata but appears only as a timeline/frame marker and jump target. The 50×50 stress check shows both true display size and a 5× inspection zoom.
+The primary transport always controls the current report target. The semantic hold remains motion metadata but appears only as a timeline/frame marker, jump target, and compact explanation that it is an inspection anchor rather than a playback pause. The 50×50 stress check shows both true display size and a 5× inspection zoom.
 
-The generator validates report state, fingerprint, bindings, and the reference image before writing. Stale or missing evidence fails closed and leaves an existing Review Page unchanged. Regenerate immediately before sharing; Review HTML is not included in artifact fingerprints and cannot establish or preserve validation.
+The agent passes `--language zh` when the user's working language is Chinese and `--language en` for every other language. The generator validates report state, fingerprint, bindings, and the reference image before writing. Stale or missing evidence fails closed and leaves an existing Review Page unchanged. Regenerate immediately before sharing; Review HTML is not included in artifact fingerprints and cannot establish or preserve validation.
 
 ## Technical validation
 

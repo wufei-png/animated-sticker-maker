@@ -121,10 +121,11 @@ Generate a visual review page beside a report:
 ```bash
 python skills/animated-sticker-maker/scripts/generate_review.py \
   output/name/validation/report.json \
-  --reference-image path/to/reference.png
+  --reference-image path/to/reference.png \
+  --language en
 ```
 
-The external reference is required only when the package did not use `--include-reference`; its SHA-256 must match the package metadata. The generated HTML is a disposable derived view, not validation evidence or a deliverable. See [`references/review-page.md`](skills/animated-sticker-maker/references/review-page.md).
+The agent passes `--language zh` when the user's working language is Chinese and uses `en` for every other language; English is the CLI default. The external reference is required only when the package did not use `--include-reference`; its SHA-256 must match the package metadata. The generated HTML is a disposable derived view, not validation evidence or a deliverable. See [`references/review-page.md`](skills/animated-sticker-maker/references/review-page.md).
 
 Platform limits drift. When a platform is named, verify its current official specification and record the source URL and verification date in the export report.
 

@@ -117,10 +117,11 @@ python skills/animated-sticker-maker/scripts/doctor.py --json export \
 ```bash
 python skills/animated-sticker-maker/scripts/generate_review.py \
   output/name/validation/report.json \
-  --reference-image path/to/reference.png
+  --reference-image path/to/reference.png \
+  --language zh
 ```
 
-只有 package 未使用 `--include-reference` 时才需要传入外部参考图，并且其 SHA-256 必须匹配 package 元数据。生成的 HTML 是可丢弃的派生视图，不属于验证证据或交付物。详见 [`references/review-page.md`](skills/animated-sticker-maker/references/review-page.md)。
+agent 应根据用户当前使用的语言显式选择页面语言：中文会话传入 `--language zh`，其他语言传入 `--language en`；CLI 默认使用英文。只有 package 未使用 `--include-reference` 时才需要传入外部参考图，并且其 SHA-256 必须匹配 package 元数据。生成的 HTML 是可丢弃的派生视图，不属于验证证据或交付物。详见 [`references/review-page.md`](skills/animated-sticker-maker/references/review-page.md)。
 
 平台限制会变化。指定平台时，应核对当前官方规范，并在导出报告里记录来源 URL 和核对日期。
 

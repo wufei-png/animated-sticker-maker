@@ -124,12 +124,13 @@ Read [references/validation.md](references/validation.md). When an exact report 
 
 ```bash
 python <skill-dir>/scripts/generate_review.py <validation-report.json> \
-  --reference-image <original-reference-image>
+  --reference-image <original-reference-image> \
+  --language <en|zh>
 ```
 
-Omit `--reference-image` when the package contains its bound reference. Otherwise provide the exact original; the generator rejects a SHA-256 mismatch. Read [references/review-page.md](references/review-page.md) for report scopes, output behavior, and the review-page lifecycle.
+Omit `--reference-image` when the package contains its bound reference. Otherwise provide the exact original; the generator rejects a SHA-256 mismatch. Choose the Review Page language from the current user conversation: use `--language zh` for Chinese and `--language en` for every other language. Do not infer it from the machine locale. Read [references/review-page.md](references/review-page.md) for report scopes, output behavior, and the review-page lifecycle.
 
-Inspect the actual review target, the semantic-hold marker, Alpha edges on checker, light, and dark backgrounds, both the true-size and zoomed 50×50 stress views, and the frame exposure sheet. On package and export pages, the player controls frames decoded from the actual encoded artifact; authored or render frames are comparison evidence. The page is read-only and does not replace maker-side judgment. If the user participates, share the freshly generated HTML and collect their feedback in the conversation; the user does not need to run Python or submit a web form. The agent remains responsible for recording the result in the exact Validation Report.
+Inspect the actual review target, the semantic-hold marker and its source explanation, Alpha edges on checker, light, and dark backgrounds, both the true-size and zoomed 50×50 stress views, and the frame exposure sheet. On package and export pages, the player controls frames decoded from the actual encoded artifact; authored or render frames are comparison evidence. The page is read-only and does not replace maker-side judgment. If the user participates, share the freshly generated HTML and collect their feedback in the conversation; the user does not need to run Python or submit a web form. The agent remains responsible for recording the result in the exact Validation Report.
 
 Record the decision with:
 

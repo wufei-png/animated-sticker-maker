@@ -9,10 +9,13 @@ When the package does not include its reference:
 ```bash
 python <skill-dir>/scripts/generate_review.py \
   <validation-report.json> \
-  --reference-image <original-reference-image>
+  --reference-image <original-reference-image> \
+  --language <en|zh>
 ```
 
 When `source/reference.json` declares an `included_path`, omit `--reference-image`; the generator uses the bound package copy and rejects an external replacement.
+
+The agent selects the page language from the user's working language: pass `--language zh` for Chinese conversations and `--language en` for every other language. English is the CLI default. The program contains both complete interface dictionaries and does not infer language from the host locale.
 
 The default output is `<report-stem>.review.html` beside the report. `--output <name.html>` may select another direct child of the same report directory. The file is written atomically.
 
@@ -37,7 +40,7 @@ The Animation Inspection Light Table shows:
 - the verified reference;
 - the real review target on checker, light, and dark exposures;
 - a controllable primary-target inspector with play, pause, speed, scrubbing, and frame stepping;
-- a semantic-hold marker on the timeline and primary frame sheet, with a jump-to-hold control;
+- a semantic-hold marker on the timeline and primary frame sheet, with a jump-to-hold control and an inline explanation of its meaning and source;
 - a 50×50 stress view showing both true display size and a 5× inspection zoom;
 - authored keyframes or the selected export source track as comparison evidence;
 - at most 24 evenly sampled render thumbnails while keeping every render frame accessible through the player;
@@ -45,6 +48,8 @@ The Animation Inspection Light Table shows:
 - a collapsed technical section containing state, constraints, checks, provenance, paths, and hashes.
 
 The page uses only embedded CSS and JavaScript. Source and render PNG media remains linked by contained relative paths. A verified external reference and decoded encoded-artifact frames are embedded in the HTML.
+
+The semantic hold is an inspection anchor, not an automatic playback pause. When `motion.semantic_hold_frame` is declared, the marker uses the midpoint of that authored frame's time span and maps that timestamp onto the current review track. Without a declaration, it falls back to the midpoint of the longest authored frame. The page states which rule was used.
 
 ## Agent interaction
 

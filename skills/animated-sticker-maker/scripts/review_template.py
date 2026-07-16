@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import html
 import json
 
 
@@ -19,16 +20,25 @@ def safe_json(value: object) -> str:
 
 def render_review_html(model: dict[str, object]) -> str:
     payload = safe_json(model)
-    return TEMPLATE.replace("__REVIEW_DATA__", payload)
+    text = model["text"]
+    assert isinstance(text, dict)
+    return (
+        TEMPLATE.replace(
+            "__HTML_LANG__",
+            html.escape(str(text["html_lang"]), quote=True),
+        )
+        .replace("__DOCUMENT_TITLE__", html.escape(str(text["document_title"])))
+        .replace("__REVIEW_DATA__", payload)
+    )
 
 
 TEMPLATE = """<!doctype html>
-<html lang="en">
+<html lang="__HTML_LANG__">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: file:; img-src 'self' data: file:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
-  <title>Animated sticker exposure review</title>
+  <title>__DOCUMENT_TITLE__</title>
   <style>
     :root {
       color-scheme: dark;
@@ -470,7 +480,7 @@ TEMPLATE = """<!doctype html>
     }
 
     .hold-marker::after {
-      content: "HOLD";
+      content: attr(data-label);
       position: absolute;
       left: 50%;
       bottom: calc(100% + 5px);
@@ -478,6 +488,34 @@ TEMPLATE = """<!doctype html>
       font: 700 8px/1 var(--utility);
       letter-spacing: 0.08em;
       transform: translateX(-50%);
+    }
+
+    .hold-explainer {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 7px 10px;
+      margin-top: 8px;
+      color: var(--ink-muted);
+      font: 12px/1.5 var(--body);
+      text-wrap: pretty;
+    }
+
+    .hold-explainer strong {
+      align-self: start;
+      color: var(--valid-mint);
+      font: 700 10px/1.5 var(--utility);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .hold-explainer p {
+      margin: 0;
+    }
+
+    .hold-source {
+      grid-column: 2;
+      color: var(--ink-muted);
+      font: 10px/1.45 var(--utility);
     }
 
     .speed-control {
@@ -688,7 +726,7 @@ TEMPLATE = """<!doctype html>
     }
 
     .frame-thumb[data-hold="true"]::after {
-      content: "HOLD";
+      content: attr(data-hold-label);
       position: absolute;
       top: 8px;
       right: 8px;
@@ -1027,7 +1065,7 @@ TEMPLATE = """<!doctype html>
     <header class="masthead">
       <div class="brand">
         <span class="brand-mark">ASM / QA</span>
-        <span class="brand-name">Animation inspection light table</span>
+        <span class="brand-name" id="brand-name"></span>
       </div>
       <span class="status-chip" id="status-chip"></span>
     </header>
@@ -1039,18 +1077,18 @@ TEMPLATE = """<!doctype html>
         <p class="intro-copy" id="scope-description"></p>
       </div>
       <dl class="report-identity">
-        <dt>Report</dt>
+        <dt id="report-label"></dt>
         <dd id="report-name"></dd>
-        <dt>Artifact fingerprint</dt>
+        <dt id="fingerprint-label"></dt>
         <dd id="fingerprint"></dd>
-        <dt>Generated</dt>
+        <dt id="generated-label"></dt>
         <dd id="generated-at"></dd>
       </dl>
     </section>
 
     <section class="section" aria-labelledby="exposure-heading">
       <div class="section-heading">
-        <h2 id="exposure-heading">Exposure rail</h2>
+        <h2 id="exposure-heading"></h2>
         <p class="section-note" id="hero-subtitle"></p>
       </div>
       <div class="exposure-rail" id="exposure-rail"></div>
@@ -1061,15 +1099,15 @@ TEMPLATE = """<!doctype html>
 
     <section class="section" aria-labelledby="evidence-heading">
       <div class="section-heading">
-        <h2 id="evidence-heading">Review evidence</h2>
-        <p class="section-note">Actual-size and inspection-zoom views follow the current report target and playhead.</p>
+        <h2 id="evidence-heading"></h2>
+        <p class="section-note" id="evidence-note"></p>
       </div>
       <div class="evidence-grid" id="evidence-grid"></div>
     </section>
 
     <section class="section" aria-labelledby="frames-heading">
       <div class="section-heading">
-        <h2 id="frames-heading">Frame exposure sheet</h2>
+        <h2 id="frames-heading"></h2>
         <p class="section-note" id="frame-strip-note"></p>
       </div>
       <div class="frame-strip" id="frame-strip"></div>
@@ -1081,21 +1119,21 @@ TEMPLATE = """<!doctype html>
 
     <section class="section" aria-labelledby="prompts-heading">
       <div class="section-heading">
-        <h2 id="prompts-heading">Visual review prompts</h2>
-        <p class="section-note">Read-only. Give feedback in the agent conversation; the agent records the result through the validation command.</p>
+        <h2 id="prompts-heading"></h2>
+        <p class="section-note" id="prompts-note"></p>
       </div>
       <div class="review-prompts" id="review-prompts"></div>
     </section>
 
-    <section class="section" aria-label="Technical details">
+    <section class="section" id="technical-section">
       <details>
-        <summary>Technical details</summary>
+        <summary id="technical-summary"></summary>
         <div class="technical-content" id="technical-content"></div>
       </details>
     </section>
 
     <footer class="footer">
-      <span>Instantaneous derived view · regenerate before sharing · not validation evidence</span>
+      <span id="footer-note"></span>
       <span id="footer-path"></span>
     </footer>
   </main>
@@ -1103,6 +1141,7 @@ TEMPLATE = """<!doctype html>
   <script>
     "use strict";
     const REVIEW_DATA = __REVIEW_DATA__;
+    const t = REVIEW_DATA.text;
     const $ = (selector, root = document) => root.querySelector(selector);
     const create = (tag, className, text) => {
       const element = document.createElement(tag);
@@ -1110,6 +1149,9 @@ TEMPLATE = """<!doctype html>
       if (text !== undefined && text !== null) element.textContent = String(text);
       return element;
     };
+    const interpolate = (template, values) =>
+      template.replace(/\{(\w+)\}/g, (_, key) => String(values[key]));
+    const statusLabel = (status) => t.status_labels[status] || status.replaceAll("_", " ");
     const imageClass = REVIEW_DATA.resampling === "nearest" ? "pixelated" : "";
 
     function toneForStatus() {
@@ -1122,7 +1164,7 @@ TEMPLATE = """<!doctype html>
 
     function addImage(stage, src, alt, role) {
       if (!src) {
-        stage.append(create("p", "stage-empty", "No reviewable media is available for this technically failed artifact."));
+        stage.append(create("p", "stage-empty", t.no_reviewable_media));
         return null;
       }
       const image = create("img", imageClass);
@@ -1145,17 +1187,36 @@ TEMPLATE = """<!doctype html>
     }
 
     function renderHeader() {
+      $("#brand-name").textContent = t.brand_name;
+      $("#report-label").textContent = t.report;
+      $("#fingerprint-label").textContent = t.artifact_fingerprint;
+      $("#generated-label").textContent = t.generated;
+      $("#exposure-heading").textContent = t.exposure_rail;
+      $("#evidence-heading").textContent = t.review_evidence;
+      $("#evidence-note").textContent = t.review_evidence_note;
+      $("#frames-heading").textContent = t.frame_exposure_sheet;
+      $("#prompts-heading").textContent = t.visual_review_prompts;
+      $("#prompts-note").textContent = t.visual_review_prompts_note;
+      $("#technical-summary").textContent = t.technical_details;
+      $("#technical-section").setAttribute("aria-label", t.technical_details);
+      $("#footer-note").textContent = t.footer_note;
       $("#scope-label").textContent = REVIEW_DATA.scope_label;
       $("#hero-title").textContent = REVIEW_DATA.hero.title;
       $("#scope-description").textContent = REVIEW_DATA.scope_description;
       $("#report-name").textContent = REVIEW_DATA.report_name;
       $("#fingerprint").textContent = REVIEW_DATA.artifact_fingerprint;
-      $("#generated-at").textContent = REVIEW_DATA.generated_at;
+      const generated = new Date(REVIEW_DATA.generated_at);
+      $("#generated-at").textContent = Number.isNaN(generated.getTime())
+        ? REVIEW_DATA.generated_at
+        : new Intl.DateTimeFormat(
+            REVIEW_DATA.language === "zh" ? "zh-CN" : "en",
+            { dateStyle: "medium", timeStyle: "medium" }
+          ).format(generated);
       $("#hero-subtitle").textContent = REVIEW_DATA.hero.subtitle;
       $("#footer-path").textContent = REVIEW_DATA.report_path;
       const chip = $("#status-chip");
-      const fullStatus = REVIEW_DATA.report_status.replaceAll("_", " ");
-      const shortStatus = REVIEW_DATA.visual_status.replaceAll("_", " ");
+      const fullStatus = statusLabel(REVIEW_DATA.report_status);
+      const shortStatus = statusLabel(REVIEW_DATA.visual_status);
       chip.replaceChildren(
         create("span", "status-long", fullStatus),
         create("span", "status-short", shortStatus)
@@ -1168,11 +1229,11 @@ TEMPLATE = """<!doctype html>
       const rail = $("#exposure-rail");
       rail.append(
         makeSlot(
-          "Reference",
+          t.reference,
           REVIEW_DATA.reference.label,
           "reference",
           REVIEW_DATA.reference.src,
-          "Verified reference image"
+          t.verified_reference_image
         )
       );
       const sequenceRole = REVIEW_DATA.hero.mode === "sequence" ? "sequence-target" : null;
@@ -1180,17 +1241,17 @@ TEMPLATE = """<!doctype html>
         ? REVIEW_DATA.inspector.frames[0].src
         : REVIEW_DATA.hero.src;
       for (const [label, stageClass] of [
-        ["Checker", "checker"],
-        ["Light", "light"],
-        ["Dark", "dark"],
+        [t.checker, "checker"],
+        [t.light, "light"],
+        [t.dark, "dark"],
       ]) {
         rail.append(
           makeSlot(
             label,
-            REVIEW_DATA.hero.format || "Unavailable",
+            REVIEW_DATA.hero.format || t.unavailable,
             stageClass,
             mainSrc,
-            `${REVIEW_DATA.hero.title} on ${label.toLowerCase()} background`,
+            `${REVIEW_DATA.hero.title} · ${label}`,
             sequenceRole
           )
         );
@@ -1204,8 +1265,8 @@ TEMPLATE = """<!doctype html>
             "span",
             "",
             REVIEW_DATA.scope === "render_track"
-              ? "Pre-encode render evidence. All three exposures share the declared render timing and playhead."
-              : "Post-encode artifact authority. All three exposures share the decoded artifact timing and playhead."
+              ? t.render_sequence_note
+              : t.encoded_sequence_note
           ),
           create("span", "format-tag", REVIEW_DATA.hero.format)
         );
@@ -1240,13 +1301,13 @@ TEMPLATE = """<!doctype html>
       const buttons = create("div", "transport-buttons");
       const previous = create("button", "icon-button", "◀");
       previous.type = "button";
-      previous.setAttribute("aria-label", "Previous frame");
+      previous.setAttribute("aria-label", t.previous_frame);
       const play = create("button", "icon-button play-button", playing ? "❚❚" : "▶");
       play.type = "button";
-      play.setAttribute("aria-label", playing ? "Pause primary review target" : "Play primary review target");
+      play.setAttribute("aria-label", playing ? t.pause_primary : t.play_primary);
       const next = create("button", "icon-button", "▶");
       next.type = "button";
-      next.setAttribute("aria-label", "Next frame");
+      next.setAttribute("aria-label", t.next_frame);
       buttons.append(previous, play, next);
 
       const timeline = create("div", "timeline");
@@ -1261,24 +1322,37 @@ TEMPLATE = """<!doctype html>
       range.max = String(Math.max(0, total - 1));
       range.step = "1";
       range.value = "0";
-      range.setAttribute("aria-label", "Frame timeline");
+      range.setAttribute("aria-label", t.frame_timeline);
       const holdMarker = create("button", "hold-marker");
       holdMarker.type = "button";
+      holdMarker.dataset.label = t.hold_badge;
       holdMarker.style.setProperty(
         "--hold-position",
         `${Math.max(0, Math.min(100, REVIEW_DATA.semantic_hold.midpoint_ms / total * 100))}%`
       );
-      holdMarker.setAttribute("aria-label", "Jump to semantic hold");
+      holdMarker.setAttribute("aria-label", t.jump_hold);
       holdMarker.title = REVIEW_DATA.semantic_hold.declared
-        ? "Jump to declared semantic hold"
-        : "Jump to longest authored hold";
+        ? t.jump_declared_hold
+        : t.jump_fallback_hold;
       timelineTrack.append(range, holdMarker);
-      timeline.append(timelineMeta, timelineTrack);
+      const holdExplainer = create("div", "hold-explainer");
+      holdExplainer.append(
+        create("strong", "", t.hold_title),
+        create("p", "", t.hold_explanation),
+        create(
+          "p",
+          "hold-source",
+          REVIEW_DATA.semantic_hold.declared
+            ? t.hold_declared_source
+            : t.hold_fallback_source
+        )
+      );
+      timeline.append(timelineMeta, timelineTrack, holdExplainer);
 
       const speedWrap = create("label", "speed-control");
-      speedWrap.append(create("span", "", "Speed"));
+      speedWrap.append(create("span", "", t.speed));
       const select = create("select");
-      select.setAttribute("aria-label", "Playback speed");
+      select.setAttribute("aria-label", t.playback_speed);
       for (const value of [0.5, 0.8, 1, 1.5, 2]) {
         const option = create("option", "", `${value}×`);
         option.value = String(value);
@@ -1293,10 +1367,10 @@ TEMPLATE = """<!doctype html>
       const loupeHeading = create("div", "slot-label");
       loupeHeading.append(
         create("span", "", REVIEW_DATA.inspector.label),
-        create("span", "", `${frames.length} frames`)
+        create("span", "", `${frames.length} ${t.frames}`)
       );
       const loupeStage = create("div", "stage checker");
-      addImage(loupeStage, frames[0].src, "Current primary review frame", "sequence-target");
+      addImage(loupeStage, frames[0].src, t.current_primary_frame, "sequence-target");
       loupe.append(loupeHeading, loupeStage);
 
       const readout = create("article", "frame-readout");
@@ -1305,11 +1379,11 @@ TEMPLATE = """<!doctype html>
       const description = create("p", "readout-description");
       const readoutGrid = create("div", "readout-grid");
       const durationCell = create("div", "readout-cell");
-      durationCell.append(create("span", "", "Duration"), create("strong"));
+      durationCell.append(create("span", "", t.duration), create("strong"));
       const timelineCell = create("div", "readout-cell");
-      timelineCell.append(create("span", "", "Timeline"), create("strong"));
+      timelineCell.append(create("span", "", t.timeline), create("strong"));
       const pathCell = create("div", "readout-cell");
-      pathCell.append(create("span", "", "Source path"), create("strong"));
+      pathCell.append(create("span", "", t.source_path), create("strong"));
       readoutGrid.append(durationCell, timelineCell, pathCell);
       readout.append(number, title, description, readoutGrid);
       inspection.append(loupe, readout);
@@ -1330,10 +1404,10 @@ TEMPLATE = """<!doctype html>
         range.value = String(Math.min(elapsed, total - 1));
         currentTime.textContent = formatTime(elapsed);
         number.textContent = frame.label;
-        title.textContent = frame.description || "Ordered frame";
+        title.textContent = frame.description || t.ordered_frame;
         description.textContent = REVIEW_DATA.scope === "render_track"
-          ? "Ordered pre-encode render evidence at the current playhead position."
-          : "Decoded post-encode evidence from the current artifact. Use it to inspect motion, identity, and Alpha.";
+          ? t.render_frame_description
+          : t.encoded_frame_description;
         durationCell.querySelector("strong").textContent = `${frame.duration_ms} ms`;
         timelineCell.querySelector("strong").textContent = `${formatTime(cumulative[frameIndex])} – ${formatTime(cumulative[frameIndex] + frame.duration_ms)}`;
         pathCell.querySelector("strong").textContent = frame.path;
@@ -1345,7 +1419,7 @@ TEMPLATE = """<!doctype html>
       function setPlaying(value) {
         playing = value;
         play.textContent = playing ? "❚❚" : "▶";
-        play.setAttribute("aria-label", playing ? "Pause primary review target" : "Play primary review target");
+        play.setAttribute("aria-label", playing ? t.pause_primary : t.play_primary);
         previousTimestamp = performance.now();
         if (playing && !raf) raf = requestAnimationFrame(tick);
       }
@@ -1410,8 +1484,8 @@ TEMPLATE = """<!doctype html>
       const smallGrid = create("div", "small-size-grid");
       const smallSrc = REVIEW_DATA.inspector.frames[0].src;
       for (const [label, mode, alt] of [
-        ["Actual size · 50 × 50", "actual", "Actual 50 by 50 stress view"],
-        ["Inspection zoom · 5×", "zoom", "Magnified 50 by 50 inspection view"],
+        [t.actual_size_label, "actual", t.actual_size_alt],
+        [t.zoom_label, "zoom", t.zoom_alt],
       ]) {
         const pane = create("div", "small-size-pane");
         pane.append(create("div", "small-size-label", label));
@@ -1422,12 +1496,8 @@ TEMPLATE = """<!doctype html>
       }
       const smallCopy = create("div", "evidence-copy");
       smallCopy.append(
-        create("h3", "", "50 × 50 stress"),
-        create(
-          "p",
-          "",
-          "Use actual size to judge readability and the 5× view to inspect silhouette, expression, and Alpha edges."
-        )
+        create("h3", "", t.stress_title),
+        create("p", "", t.stress_copy)
       );
       small.append(smallGrid, smallCopy);
       grid.append(small);
@@ -1435,11 +1505,15 @@ TEMPLATE = """<!doctype html>
       if (REVIEW_DATA.preview) {
         const preview = create("article", "evidence-card");
         const previewStage = create("div", "stage checker");
-        addImage(previewStage, REVIEW_DATA.preview.src, "Platform preview PNG");
+        addImage(previewStage, REVIEW_DATA.preview.src, t.platform_preview_alt);
         const previewCopy = create("div", "evidence-copy");
         previewCopy.append(
           create("h3", "", REVIEW_DATA.preview.label),
-          create("p", "", `Exported preview frame ${REVIEW_DATA.preview.frame}.`)
+          create(
+            "p",
+            "",
+            interpolate(t.preview_frame, { frame: REVIEW_DATA.preview.frame })
+          )
         );
         preview.append(previewStage, previewCopy);
         grid.append(preview);
@@ -1454,17 +1528,25 @@ TEMPLATE = """<!doctype html>
         if (interactive) {
           element.type = "button";
           element.dataset.index = String(index);
-          element.setAttribute("aria-label", `Show ${frame.label}`);
+          element.setAttribute(
+            "aria-label",
+            interpolate(t.show_frame, { label: frame.label })
+          );
         }
         if (markHold && index === REVIEW_DATA.semantic_hold.primary_index) {
           element.dataset.hold = "true";
+          element.dataset.holdLabel = t.hold_badge;
           element.setAttribute(
             "aria-label",
-            `${element.getAttribute("aria-label")} · semantic hold`
+            `${element.getAttribute("aria-label")} · ${t.semantic_hold_suffix}`
           );
         }
         const stage = create("div", "thumb-stage");
-        addImage(stage, frame.src, `${frame.label} thumbnail`);
+        addImage(
+          stage,
+          frame.src,
+          interpolate(t.thumbnail_alt, { label: frame.label })
+        );
         const meta = create("div", "thumb-meta");
         meta.append(
           create("span", "", frame.label),
@@ -1485,7 +1567,7 @@ TEMPLATE = """<!doctype html>
           create(
             "p",
             "",
-            prompt.note || "Pending visual observation. Give the agent a concise finding in the conversation."
+            prompt.note || t.pending_observation
           )
         );
         root.append(item);
@@ -1497,7 +1579,7 @@ TEMPLATE = """<!doctype html>
       const root = $("#technical-content");
 
       const summaryGroup = create("section", "technical-group");
-      summaryGroup.append(create("h3", "", "Boundary summary"));
+      summaryGroup.append(create("h3", "", t.boundary_summary));
       const summaryGrid = create("div", "technical-grid");
       for (const item of data.summary) {
         const cell = create("div", "technical-item");
@@ -1508,11 +1590,11 @@ TEMPLATE = """<!doctype html>
       root.append(summaryGroup);
 
       const checksGroup = create("section", "technical-group");
-      checksGroup.append(create("h3", "", "Technical checks"));
+      checksGroup.append(create("h3", "", t.technical_checks));
       const checks = create("div", "check-list");
       for (const check of data.checks) {
         const row = create("div", "check-row");
-        const status = create("strong", "", check.passed ? "PASS" : "FAIL");
+        const status = create("strong", "", check.passed ? t.pass : t.fail);
         status.dataset.passed = String(check.passed);
         row.append(status, create("span", "", check.id));
         checks.append(row);
@@ -1521,7 +1603,7 @@ TEMPLATE = """<!doctype html>
       root.append(checksGroup);
 
       const filesGroup = create("section", "technical-group");
-      filesGroup.append(create("h3", "", "Primary files and hashes"));
+      filesGroup.append(create("h3", "", t.primary_files_hashes));
       const files = create("div", "file-list");
       for (const file of data.files) {
         const row = create("div", "file-row");
@@ -1537,7 +1619,7 @@ TEMPLATE = """<!doctype html>
 
       if (data.spec_url) {
         const provenance = create("section", "technical-group");
-        provenance.append(create("h3", "", "Specification provenance"));
+        provenance.append(create("h3", "", t.specification_provenance));
         const link = create("a", "", data.spec_url);
         link.href = data.spec_url;
         link.rel = "noopener";
@@ -1561,8 +1643,13 @@ TEMPLATE = """<!doctype html>
     );
     $("#frame-strip-note").textContent =
       REVIEW_DATA.inspector.frames.length > REVIEW_DATA.inspector.overview_indices.length
-        ? `${REVIEW_DATA.inspector.overview_indices.length} evenly sampled thumbnails; transport controls still access all ${REVIEW_DATA.inspector.frames.length} frames.`
-        : `All ${REVIEW_DATA.inspector.frames.length} frames are shown.`;
+        ? interpolate(t.sampled_thumbnails, {
+            shown: REVIEW_DATA.inspector.overview_indices.length,
+            total: REVIEW_DATA.inspector.frames.length,
+          })
+        : interpolate(t.all_frames_shown, {
+            total: REVIEW_DATA.inspector.frames.length,
+          });
     document.querySelectorAll(".frame-thumb[data-index]").forEach((thumb) => {
       thumb.addEventListener("click", () => player.seekFrame(Number(thumb.dataset.index)));
     });

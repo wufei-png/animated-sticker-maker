@@ -33,11 +33,21 @@ def main() -> None:
             "<report-stem>.review.html"
         ),
     )
+    parser.add_argument(
+        "--language",
+        choices=("en", "zh"),
+        default="en",
+        help=(
+            "review-page language; the agent should use zh for a Chinese "
+            "user conversation and en for every other language"
+        ),
+    )
     args = parser.parse_args()
     output = generate_review(
         args.report,
         reference_image=args.reference_image,
         output=args.output,
+        language=args.language,
     )
     print(f"Wrote {output}")
 
