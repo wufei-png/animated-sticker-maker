@@ -373,7 +373,6 @@ TEMPLATE = """<!doctype html>
       text-align: center;
     }
 
-    .native-note,
     .sequence-note {
       display: flex;
       align-items: center;
@@ -429,6 +428,10 @@ TEMPLATE = """<!doctype html>
       min-width: 0;
     }
 
+    .timeline-track {
+      position: relative;
+    }
+
     .timeline-meta {
       display: flex;
       justify-content: space-between;
@@ -445,6 +448,36 @@ TEMPLATE = """<!doctype html>
       margin: 0;
       accent-color: var(--playhead-amber);
       cursor: pointer;
+    }
+
+    .hold-marker {
+      position: absolute;
+      top: 2px;
+      left: var(--hold-position);
+      width: 10px;
+      min-height: 20px;
+      padding: 0;
+      border: 0;
+      border-radius: 2px;
+      color: #171a1d;
+      background: var(--valid-mint);
+      box-shadow: 0 0 0 2px var(--film-well);
+      transform: translateX(-50%);
+    }
+
+    .hold-marker:hover {
+      background: #a3ddce;
+    }
+
+    .hold-marker::after {
+      content: "HOLD";
+      position: absolute;
+      left: 50%;
+      bottom: calc(100% + 5px);
+      color: var(--valid-mint);
+      font: 700 8px/1 var(--utility);
+      letter-spacing: 0.08em;
+      transform: translateX(-50%);
     }
 
     .speed-control {
@@ -540,8 +573,12 @@ TEMPLATE = """<!doctype html>
 
     .evidence-grid {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: minmax(0, 1fr);
       gap: 12px;
+    }
+
+    .evidence-grid[data-count="2"] {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .evidence-card {
@@ -575,11 +612,51 @@ TEMPLATE = """<!doctype html>
       line-height: 1.45;
     }
 
-    .small-stage img {
+    .small-size-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      min-height: 358px;
+    }
+
+    .small-size-pane {
+      min-width: 0;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      border-right: 1px solid var(--line);
+    }
+
+    .small-size-pane:last-child {
+      border-right: 0;
+    }
+
+    .small-size-label {
+      min-height: 38px;
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      border-bottom: 1px solid var(--line);
+      color: var(--ink-muted);
+      font: 700 9px/1 var(--utility);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .evidence-card .small-size-stage {
+      min-height: 320px;
+    }
+
+    .small-size-stage.actual img {
       width: 50px;
       height: 50px;
       max-width: 50px;
       max-height: 50px;
+    }
+
+    .small-size-stage.zoom img {
+      width: 250px;
+      height: auto;
+      max-width: calc(100% - 44px);
+      max-height: 250px;
     }
 
     .frame-strip {
@@ -604,6 +681,23 @@ TEMPLATE = """<!doctype html>
     .frame-thumb[aria-current="true"] {
       border-color: var(--playhead-amber);
       box-shadow: inset 0 -3px var(--playhead-amber);
+    }
+
+    .frame-thumb[data-hold="true"] {
+      position: relative;
+    }
+
+    .frame-thumb[data-hold="true"]::after {
+      content: "HOLD";
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      padding: 4px 6px;
+      border-radius: 3px;
+      color: #171a1d;
+      background: var(--valid-mint);
+      font: 700 8px/1 var(--utility);
+      letter-spacing: 0.08em;
     }
 
     .thumb-stage {
@@ -873,6 +967,19 @@ TEMPLATE = """<!doctype html>
         grid-template-columns: 1fr;
       }
 
+      .small-size-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .small-size-pane {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .small-size-pane:last-child {
+        border-bottom: 0;
+      }
+
       .stage {
         min-height: min(82vw, 390px);
       }
@@ -955,7 +1062,7 @@ TEMPLATE = """<!doctype html>
     <section class="section" aria-labelledby="evidence-heading">
       <div class="section-heading">
         <h2 id="evidence-heading">Review evidence</h2>
-        <p class="section-note">The hold and 50 × 50 views derive from the current report's real review target.</p>
+        <p class="section-note">Actual-size and inspection-zoom views follow the current report target and playhead.</p>
       </div>
       <div class="evidence-grid" id="evidence-grid"></div>
     </section>
@@ -1090,25 +1197,16 @@ TEMPLATE = """<!doctype html>
       }
 
       const noteRoot = $("#hero-mode-note");
-      if (REVIEW_DATA.hero.mode === "native") {
-        const note = create("div", "native-note");
-        note.append(
-          create("span", "", "Native GIF/WebP playback cannot be paused or speed-controlled reliably by the browser."),
-        );
-        const restart = create("button", "", "Restart encoded playback");
-        restart.type = "button";
-        restart.addEventListener("click", () => {
-          rail.querySelectorAll(".exposure-slot:not(:first-child) img").forEach((image) => {
-            const replacement = image.cloneNode(false);
-            image.replaceWith(replacement);
-          });
-        });
-        note.append(restart);
-        noteRoot.append(note);
-      } else if (REVIEW_DATA.hero.mode === "sequence") {
+      if (REVIEW_DATA.hero.mode === "sequence") {
         const note = create("div", "sequence-note");
         note.append(
-          create("span", "", "All three exposures share the declared render-frame timing and playhead."),
+          create(
+            "span",
+            "",
+            REVIEW_DATA.scope === "render_track"
+              ? "Pre-encode render evidence. All three exposures share the declared render timing and playhead."
+              : "Post-encode artifact authority. All three exposures share the decoded artifact timing and playhead."
+          ),
           create("span", "format-tag", REVIEW_DATA.hero.format)
         );
         noteRoot.append(note);
@@ -1145,7 +1243,7 @@ TEMPLATE = """<!doctype html>
       previous.setAttribute("aria-label", "Previous frame");
       const play = create("button", "icon-button play-button", playing ? "❚❚" : "▶");
       play.type = "button";
-      play.setAttribute("aria-label", playing ? "Pause frame inspector" : "Play frame inspector");
+      play.setAttribute("aria-label", playing ? "Pause primary review target" : "Play primary review target");
       const next = create("button", "icon-button", "▶");
       next.type = "button";
       next.setAttribute("aria-label", "Next frame");
@@ -1156,6 +1254,7 @@ TEMPLATE = """<!doctype html>
       const currentTime = create("span", "", "00:000");
       const totalTime = create("span", "", formatTime(total));
       timelineMeta.append(currentTime, totalTime);
+      const timelineTrack = create("div", "timeline-track");
       const range = create("input");
       range.type = "range";
       range.min = "0";
@@ -1163,7 +1262,18 @@ TEMPLATE = """<!doctype html>
       range.step = "1";
       range.value = "0";
       range.setAttribute("aria-label", "Frame timeline");
-      timeline.append(timelineMeta, range);
+      const holdMarker = create("button", "hold-marker");
+      holdMarker.type = "button";
+      holdMarker.style.setProperty(
+        "--hold-position",
+        `${Math.max(0, Math.min(100, REVIEW_DATA.semantic_hold.midpoint_ms / total * 100))}%`
+      );
+      holdMarker.setAttribute("aria-label", "Jump to semantic hold");
+      holdMarker.title = REVIEW_DATA.semantic_hold.declared
+        ? "Jump to declared semantic hold"
+        : "Jump to longest authored hold";
+      timelineTrack.append(range, holdMarker);
+      timeline.append(timelineMeta, timelineTrack);
 
       const speedWrap = create("label", "speed-control");
       speedWrap.append(create("span", "", "Speed"));
@@ -1186,7 +1296,7 @@ TEMPLATE = """<!doctype html>
         create("span", "", `${frames.length} frames`)
       );
       const loupeStage = create("div", "stage checker");
-      addImage(loupeStage, frames[0].src, "Current source frame", "sequence-target");
+      addImage(loupeStage, frames[0].src, "Current primary review frame", "sequence-target");
       loupe.append(loupeHeading, loupeStage);
 
       const readout = create("article", "frame-readout");
@@ -1221,9 +1331,9 @@ TEMPLATE = """<!doctype html>
         currentTime.textContent = formatTime(elapsed);
         number.textContent = frame.label;
         title.textContent = frame.description || "Ordered frame";
-        description.textContent = frame.description
-          ? "Use this frame to locate motion, identity, and Alpha issues. The encoded artifact remains the authority when present."
-          : "Ordered render evidence at the current playhead position.";
+        description.textContent = REVIEW_DATA.scope === "render_track"
+          ? "Ordered pre-encode render evidence at the current playhead position."
+          : "Decoded post-encode evidence from the current artifact. Use it to inspect motion, identity, and Alpha.";
         durationCell.querySelector("strong").textContent = `${frame.duration_ms} ms`;
         timelineCell.querySelector("strong").textContent = `${formatTime(cumulative[frameIndex])} – ${formatTime(cumulative[frameIndex] + frame.duration_ms)}`;
         pathCell.querySelector("strong").textContent = frame.path;
@@ -1235,7 +1345,7 @@ TEMPLATE = """<!doctype html>
       function setPlaying(value) {
         playing = value;
         play.textContent = playing ? "❚❚" : "▶";
-        play.setAttribute("aria-label", playing ? "Pause frame inspector" : "Play frame inspector");
+        play.setAttribute("aria-label", playing ? "Pause primary review target" : "Play primary review target");
         previousTimestamp = performance.now();
         if (playing && !raf) raf = requestAnimationFrame(tick);
       }
@@ -1276,6 +1386,14 @@ TEMPLATE = """<!doctype html>
         elapsed = Number(range.value);
         updateTargets();
       });
+      holdMarker.addEventListener("click", () => {
+        setPlaying(false);
+        elapsed = Math.max(
+          0,
+          Math.min(total - 1, REVIEW_DATA.semantic_hold.midpoint_ms)
+        );
+        updateTargets();
+      });
       select.addEventListener("change", () => {
         speed = Number(select.value);
         previousTimestamp = performance.now();
@@ -1288,39 +1406,31 @@ TEMPLATE = """<!doctype html>
 
     function renderEvidence() {
       const grid = $("#evidence-grid");
-      const hold = create("article", "evidence-card");
-      const holdStage = create("div", "stage checker");
-      addImage(
-        holdStage,
-        REVIEW_DATA.semantic_hold.src,
-        "Semantic hold extracted from the current review target"
-      );
-      const holdCopy = create("div", "evidence-copy");
-      holdCopy.append(
-        create("h3", "", REVIEW_DATA.semantic_hold.declared ? "Semantic hold" : "Longest authored hold"),
-        create(
-          "p",
-          "",
-          REVIEW_DATA.semantic_hold.note ||
-            "Unavailable because the encoded artifact did not pass technical validation."
-        )
-      );
-      hold.append(holdStage, holdCopy);
-
       const small = create("article", "evidence-card");
-      const smallStage = create("div", "stage checker small-stage");
-      const smallRole = REVIEW_DATA.small_size.mode === "sequence" ? "sequence-target" : null;
-      const smallSrc = REVIEW_DATA.small_size.mode === "sequence"
-        ? REVIEW_DATA.inspector.frames[0].src
-        : REVIEW_DATA.small_size.src;
-      addImage(smallStage, smallSrc, "50 by 50 stress view", smallRole);
+      const smallGrid = create("div", "small-size-grid");
+      const smallSrc = REVIEW_DATA.inspector.frames[0].src;
+      for (const [label, mode, alt] of [
+        ["Actual size · 50 × 50", "actual", "Actual 50 by 50 stress view"],
+        ["Inspection zoom · 5×", "zoom", "Magnified 50 by 50 inspection view"],
+      ]) {
+        const pane = create("div", "small-size-pane");
+        pane.append(create("div", "small-size-label", label));
+        const stage = create("div", `stage checker small-size-stage ${mode}`);
+        addImage(stage, smallSrc, alt, "sequence-target");
+        pane.append(stage);
+        smallGrid.append(pane);
+      }
       const smallCopy = create("div", "evidence-copy");
       smallCopy.append(
         create("h3", "", "50 × 50 stress"),
-        create("p", "", "Check silhouette, expression, and the primary semantic signal at small-icon size.")
+        create(
+          "p",
+          "",
+          "Use actual size to judge readability and the 5× view to inspect silhouette, expression, and Alpha edges."
+        )
       );
-      small.append(smallStage, smallCopy);
-      grid.append(hold, small);
+      small.append(smallGrid, smallCopy);
+      grid.append(small);
 
       if (REVIEW_DATA.preview) {
         const preview = create("article", "evidence-card");
@@ -1334,9 +1444,10 @@ TEMPLATE = """<!doctype html>
         preview.append(previewStage, previewCopy);
         grid.append(preview);
       }
+      grid.dataset.count = String(grid.children.length);
     }
 
-    function renderStrip(root, frames, indices, interactive) {
+    function renderStrip(root, frames, indices, interactive, markHold = false) {
       for (const index of indices) {
         const frame = frames[index];
         const element = create(interactive ? "button" : "article", "frame-thumb");
@@ -1344,6 +1455,13 @@ TEMPLATE = """<!doctype html>
           element.type = "button";
           element.dataset.index = String(index);
           element.setAttribute("aria-label", `Show ${frame.label}`);
+        }
+        if (markHold && index === REVIEW_DATA.semantic_hold.primary_index) {
+          element.dataset.hold = "true";
+          element.setAttribute(
+            "aria-label",
+            `${element.getAttribute("aria-label")} · semantic hold`
+          );
         }
         const stage = create("div", "thumb-stage");
         addImage(stage, frame.src, `${frame.label} thumbnail`);
@@ -1438,6 +1556,7 @@ TEMPLATE = """<!doctype html>
       $("#frame-strip"),
       REVIEW_DATA.inspector.frames,
       REVIEW_DATA.inspector.overview_indices,
+      true,
       true
     );
     $("#frame-strip-note").textContent =

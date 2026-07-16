@@ -141,6 +141,13 @@ class ReviewPageTests(unittest.TestCase):
         self.assertEqual(indices[-1], 239)
         self.assertEqual(indices, sorted(set(indices)))
 
+        with_required = review_page.overview_indices(
+            240,
+            required_index=117,
+        )
+        self.assertEqual(len(with_required), 24)
+        self.assertIn(117, with_required)
+
     def test_all_report_scopes_generate_one_visual_language(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             package = self.package_fixture(Path(temporary))
@@ -180,7 +187,53 @@ class ReviewPageTests(unittest.TestCase):
                 self.assertIn("Exposure rail", html)
                 self.assertIn("Visual review prompts", html)
 
-    def test_render_export_uses_render_track_inspector(self) -> None:
+    def test_encoded_package_uses_decoded_artifact_player(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            package = self.package_fixture(Path(temporary))
+            report = package / "validation" / "report.json"
+            output = report.with_name("report.review.html")
+
+            self.require_success(
+                REVIEW_SCRIPT,
+                report,
+                "--reference-image",
+                FIXTURE / "reference.png",
+            )
+            model = review_page.build_review_model(
+                report,
+                reference_image=FIXTURE / "reference.png",
+                output_path=output,
+            )
+            html = output.read_text(encoding="utf-8")
+
+            self.assertEqual(
+                [frame["duration_ms"] for frame in model["inspector"]["frames"]],
+                [200, 200, 600, 200],
+            )
+            self.assertEqual(model["semantic_hold"]["primary_index"], 2)
+            self.assertTrue(
+                all(
+                    frame["src"].startswith("data:image/png;base64,")
+                    for frame in model["inspector"]["frames"]
+                )
+            )
+            self.assertIn(
+                '"label":"Decoded encoded-artifact inspector"',
+                html,
+            )
+            self.assertIn('"label":"E0001"', html)
+            self.assertIn('"path":"sticker.webp#frame=1"', html)
+            self.assertIn("Post-encode artifact authority", html)
+            self.assertIn("Actual size · 50 × 50", html)
+            self.assertIn("Inspection zoom · 5×", html)
+            self.assertIn("Jump to semantic hold", html)
+            self.assertNotIn("Restart encoded playback", html)
+            self.assertNotIn(
+                'create("h3", "", REVIEW_DATA.semantic_hold',
+                html,
+            )
+
+    def test_render_export_uses_decoded_gif_with_render_comparison(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             package = self.package_fixture(Path(temporary))
             self.record_visual_validation(
@@ -209,9 +262,16 @@ class ReviewPageTests(unittest.TestCase):
                 '{"label":"Frame track","value":"render"}',
                 html,
             )
-            self.assertIn('"label":"Render track inspector"', html)
-            self.assertIn("use the selected-track inspector", html)
-            self.assertIn('"label":"Authored semantic anchors"', html)
+            self.assertIn(
+                '"label":"Decoded encoded-artifact inspector"',
+                html,
+            )
+            self.assertIn(
+                '"label":"Selected source-track comparison"',
+                html,
+            )
+            self.assertIn('"label":"R0001"', html)
+            self.assertIn("Post-encode artifact authority", html)
 
     def test_stale_or_wrong_reference_does_not_replace_existing_review(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

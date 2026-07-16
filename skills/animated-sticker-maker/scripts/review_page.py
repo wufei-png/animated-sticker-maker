@@ -15,6 +15,7 @@ from urllib.parse import quote
 from PIL import Image
 
 from artifact_integrity import safe_relative_file, sha256_path
+from media_validation import webp_animation_durations
 from motion_schema import validate_motion
 from review_template import render_review_html
 from validation_integrity import validate_report_binding, validate_report_state
@@ -232,15 +233,82 @@ def frame_records(
     return records
 
 
-def overview_indices(frame_count: int, limit: int = OVERVIEW_LIMIT) -> list[int]:
+def encoded_frame_records(
+    path: Path,
+    package: Path,
+    *,
+    format_label: str,
+) -> list[dict[str, object]]:
+    with Image.open(path) as image:
+        frame_count = getattr(image, "n_frames", 1)
+        if frame_count < 1:
+            raise ValueError(f"encoded artifact has no frames: {path}")
+        if image.format == "WEBP":
+            durations = webp_animation_durations(path)
+        else:
+            durations = []
+            for index in range(frame_count):
+                image.seek(index)
+                duration = image.info.get("duration")
+                durations.append(duration if isinstance(duration, int) else 0)
+        if len(durations) != frame_count or any(
+            not isinstance(duration, int) or duration <= 0
+            for duration in durations
+        ):
+            raise ValueError(
+                f"encoded artifact has invalid frame timing: {path}"
+            )
+
+        try:
+            display_path = path.resolve().relative_to(
+                package.resolve()
+            ).as_posix()
+        except ValueError:
+            display_path = str(path.resolve())
+        records: list[dict[str, object]] = []
+        for index, duration in enumerate(durations):
+            image.seek(index)
+            records.append(
+                {
+                    "index": index,
+                    "label": f"E{index + 1:04d}",
+                    "src": png_data_uri(image.convert("RGBA")),
+                    "path": f"{display_path}#frame={index + 1}",
+                    "duration_ms": duration,
+                    "description": (
+                        f"Decoded frame from the actual {format_label} artifact"
+                    ),
+                }
+            )
+    return records
+
+
+def overview_indices(
+    frame_count: int,
+    limit: int = OVERVIEW_LIMIT,
+    *,
+    required_index: int | None = None,
+) -> list[int]:
     if frame_count <= limit:
         return list(range(frame_count))
-    return sorted(
+    indices = sorted(
         {
             round(index * (frame_count - 1) / (limit - 1))
             for index in range(limit)
         }
     )
+    if (
+        required_index is not None
+        and 0 <= required_index < frame_count
+        and required_index not in indices
+    ):
+        replace_at = min(
+            range(1, len(indices) - 1),
+            key=lambda index: abs(indices[index] - required_index),
+        )
+        indices[replace_at] = required_index
+        indices = sorted(set(indices))
+    return indices
 
 
 def semantic_hold(
@@ -285,21 +353,6 @@ def sequence_frame_at_time(
         if target_ms < elapsed:
             return index
     return len(frames) - 1
-
-
-def encoded_frame_at_time(path: Path, target_ms: float) -> Image.Image:
-    with Image.open(path) as image:
-        elapsed = 0
-        frame_count = getattr(image, "n_frames", 1)
-        for index in range(frame_count):
-            image.seek(index)
-            duration = image.info.get("duration")
-            if not isinstance(duration, int) or duration <= 0:
-                duration = 100
-            elapsed += duration
-            if target_ms < elapsed or index == frame_count - 1:
-                return image.convert("RGBA")
-    raise ValueError(f"cannot extract a semantic frame from {path}")
 
 
 def primary_file_record(
@@ -465,14 +518,20 @@ def build_review_model(
         candidate = package / "sticker.webp"
         if candidate.is_file():
             main_path = candidate
+            inspector = encoded_frame_records(
+                candidate,
+                package,
+                format_label="Animated WebP",
+            )
+            inspector_kind = "encoded"
+            auxiliary = authored
             hero = {
-                "mode": "native",
+                "mode": "sequence",
                 "title": "Encoded package",
                 "subtitle": (
-                    "Actual sticker.webp playback. Browser playback is native; "
-                    "use the source-track inspector to pause or scrub."
+                    "Decoded frames from the actual sticker.webp artifact. "
+                    "The transport controls this post-encode result."
                 ),
-                "src": relative_media_url(candidate, output_dir),
                 "format": "Animated WebP",
             }
         elif technical_pass:
@@ -497,7 +556,7 @@ def build_review_model(
             "title": "Render track preview",
             "subtitle": (
                 "Exact ordered render PNG frames and declared timing. "
-                "This is a frame-track preview, not an encoded deliverable."
+                "This is pre-encode evidence, not an encoded deliverable."
             ),
             "format": "Ordered render PNG sequence",
         }
@@ -510,15 +569,23 @@ def build_review_model(
             gif.get("path"),
             "gif.path",
         )
+        source_track: list[dict[str, object]]
         frame_track = report.get("frame_track")
         if frame_track == "render":
             if not rendered:
                 raise ValueError("render export requires motion.render.frames")
-            inspector = rendered
-            inspector_kind = "render"
-            auxiliary = authored
+            source_track = rendered
         elif frame_track != "keyframes":
             raise ValueError("export frame_track must be keyframes or render")
+        else:
+            source_track = authored
+        inspector = encoded_frame_records(
+            main_path,
+            package,
+            format_label="Animated GIF",
+        )
+        inspector_kind = "encoded"
+        auxiliary = source_track
         preview = report.get("preview")
         if isinstance(preview, dict):
             preview_path = safe_relative_file(
@@ -527,49 +594,19 @@ def build_review_model(
                 "preview.path",
             )
         hero = {
-            "mode": "native",
+            "mode": "sequence",
             "title": f"{report.get('platform')} export",
             "subtitle": (
-                "Actual exported GIF playback. Browser playback is native; "
-                "use the selected-track inspector to pause or scrub."
+                "Decoded frames from the actual exported GIF. "
+                "The transport controls this platform derivative."
             ),
-            "src": relative_media_url(main_path, output_dir),
             "format": "Animated GIF",
         }
 
-    semantic_src = None
-    semantic_note = None
-    if scope == "render_track":
-        render_index = sequence_frame_at_time(
-            rendered,
-            float(hold["midpoint_ms"]),
-        )
-        render_path = safe_relative_file(
-            source,
-            rendered[render_index]["path"],
-            "semantic render frame",
-        )
-        with Image.open(render_path) as image:
-            semantic_src = png_data_uri(image)
-        semantic_note = (
-            f"Render frame {render_index + 1} at the authored hold midpoint"
-        )
-    elif main_path is not None:
-        try:
-            semantic_src = png_data_uri(
-                encoded_frame_at_time(
-                    main_path,
-                    float(hold["midpoint_ms"]),
-                )
-            )
-        except (OSError, ValueError):
-            if technical_pass:
-                raise
-        if semantic_src is not None:
-            semantic_note = (
-                "Frame extracted from the actual encoded artifact at the "
-                "authored hold midpoint"
-            )
+    hold["primary_index"] = sequence_frame_at_time(
+        inspector,
+        float(hold["midpoint_ms"]),
+    )
 
     visual = report["visual_validation"]
     assert isinstance(visual, dict)
@@ -586,22 +623,25 @@ def build_review_model(
     ]
 
     model = {
-        "schema_version": 1,
+        "schema_version": 2,
         "scope": scope,
         "scope_label": {
-            "package_source": "Package source",
-            "render_track": "Render track",
-            "export_files": "Platform export",
+            "package_source": "Encoded artifact",
+            "render_track": "Pre-encode render track",
+            "export_files": "Encoded platform derivative",
         }[scope],
         "scope_description": {
             "package_source": (
-                "Review the actual encoded package against its authored frames."
+                "Post-encode authority: inspect the actual packaged WebP; "
+                "authored frames are comparison evidence."
             ),
             "render_track": (
-                "Review the declared high-frame track before platform encoding."
+                "Pre-encode evidence: inspect the ordered render PNG sequence "
+                "before packaging or platform encoding."
             ),
             "export_files": (
-                "Review the actual platform derivative and its source track."
+                "Post-export authority: inspect the actual platform GIF; its "
+                "selected source track is comparison evidence."
             ),
         }[scope],
         "report_name": report_path.name,
@@ -616,19 +656,28 @@ def build_review_model(
         "hero": hero,
         "inspector": {
             "label": (
-                "Render track inspector"
+                "Decoded encoded-artifact inspector"
+                if inspector_kind == "encoded"
+                else "Render track inspector"
                 if inspector_kind == "render"
-                else "Authored source-track inspector"
+                else "Authored keyframe inspector"
             ),
             "frames": inspector,
-            "overview_indices": overview_indices(len(inspector)),
+            "overview_indices": overview_indices(
+                len(inspector),
+                required_index=int(hold["primary_index"]),
+            ),
             "total_duration_ms": sum(
                 int(frame["duration_ms"]) for frame in inspector
             ),
             "loop": motion["loop"],
         },
         "auxiliary_frames": {
-            "label": "Authored semantic anchors",
+            "label": (
+                "Selected source-track comparison"
+                if scope == "export_files"
+                else "Authored keyframe comparison"
+            ),
             "frames": auxiliary,
             "overview_indices": overview_indices(len(auxiliary))
             if auxiliary
@@ -636,12 +685,8 @@ def build_review_model(
         },
         "semantic_hold": {
             **hold,
-            "src": semantic_src,
-            "note": semantic_note,
         },
         "small_size": {
-            "mode": hero["mode"],
-            "src": hero.get("src"),
             "label": "50 × 50 stress view",
         },
         "preview": (

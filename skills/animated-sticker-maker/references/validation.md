@@ -16,9 +16,11 @@ Run doctor on the exact report before delivery. A package diagnosis aggregates i
 
 Use `scripts/generate_review.py` when an exact report reaches visual validation and its artifact is intended for delivery. The page is one read-only, offline visual language that switches its main view by `artifact_scope`; it never scans or aggregates unrelated reports.
 
-- `package_source` reviews the actual encoded `sticker.webp` and authored source frames.
+- `package_source` reviews frames decoded from the actual encoded `sticker.webp`; authored source frames are comparison evidence.
 - `render_track` reviews the exact ordered render PNG sequence and clearly labels it as a frame-track preview rather than an encoded deliverable.
-- `export_files` reviews the actual exported GIF, optional preview PNG, and the source track used for that export.
+- `export_files` reviews frames decoded from the actual exported GIF, its optional preview PNG, and the source track used for comparison.
+
+The primary transport always controls the current report target. The semantic hold remains motion metadata but appears only as a timeline/frame marker and jump target. The 50×50 stress check shows both true display size and a 5× inspection zoom.
 
 The generator validates report state, fingerprint, bindings, and the reference image before writing. Stale or missing evidence fails closed and leaves an existing Review Page unchanged. Regenerate immediately before sharing; Review HTML is not included in artifact fingerprints and cannot establish or preserve validation.
 

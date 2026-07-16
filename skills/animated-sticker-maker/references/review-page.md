@@ -22,11 +22,13 @@ One page represents one report and its bound files:
 
 | `artifact_scope` | Main review target | Frame inspector |
 | --- | --- | --- |
-| `package_source` | Actual encoded `sticker.webp` | Authored keyframes |
+| `package_source` | Frames decoded from actual `sticker.webp` | The same decoded artifact frames |
 | `render_track` | Ordered render PNG sequence with exact declared timing | The same render sequence |
-| `export_files` | Actual exported GIF and optional preview PNG | The authored or render source track selected by the export |
+| `export_files` | Frames decoded from the actual exported GIF | The same decoded artifact frames |
 
 The generator accepts internally consistent `pending`, `pass`, technical-fail, and visual-fail reports. It rejects missing files, stale fingerprints, inconsistent bindings, invalid report state, an absent external reference, and a reference SHA-256 mismatch. A render-track page also requires the package source report to remain valid because the reference identity evidence belongs to that source boundary.
+
+Package and export pages decode their encoded artifact into PNG evidence when the HTML is generated. Their authored or selected render track remains visible only as comparison evidence. Render pages use the pre-encode PNG track directly. The same transport therefore always controls the current report's primary review target.
 
 ## Interface
 
@@ -34,16 +36,15 @@ The Animation Inspection Light Table shows:
 
 - the verified reference;
 - the real review target on checker, light, and dark exposures;
-- native encoded playback for GIF/WebP, without pretending the browser can pause or change its speed;
-- a controllable source-frame inspector with play, pause, speed, scrubbing, and frame stepping;
-- the semantic hold extracted from the actual encoded artifact, or mapped to the corresponding render frame;
-- a 50×50 stress view;
-- all authored keyframes;
+- a controllable primary-target inspector with play, pause, speed, scrubbing, and frame stepping;
+- a semantic-hold marker on the timeline and primary frame sheet, with a jump-to-hold control;
+- a 50×50 stress view showing both true display size and a 5× inspection zoom;
+- authored keyframes or the selected export source track as comparison evidence;
 - at most 24 evenly sampled render thumbnails while keeping every render frame accessible through the player;
 - existing visual-validation notes;
 - a collapsed technical section containing state, constraints, checks, provenance, paths, and hashes.
 
-The page uses only embedded CSS and JavaScript. Media remains linked by contained relative paths, except for a verified external reference and extracted semantic frame, which are embedded in the HTML.
+The page uses only embedded CSS and JavaScript. Source and render PNG media remains linked by contained relative paths. A verified external reference and decoded encoded-artifact frames are embedded in the HTML.
 
 ## Agent interaction
 
