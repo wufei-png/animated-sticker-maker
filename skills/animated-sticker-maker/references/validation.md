@@ -28,6 +28,12 @@ The agent passes `--language zh` when the user's working language is Chinese and
 
 Use the scripts to verify dimensions, file formats, frame count, durations, loop metadata, Alpha, paths, fingerprints, and platform constraints. A failed technical validation must not be overridden by visual judgment.
 
+## Report contract
+
+Package, render-track, and export Validation Reports use `schema_version: 1` and identify their boundary with `artifact_scope`. Each scope has a closed set of required and optional fields, with nested evidence types validated before artifact binding. Only the current report schema is accepted. There is no legacy reader, cleanup parser, or migration path; remove an unsupported old export set before regenerating it with the current packager or exporter.
+
+Every report contains `policy_overrides`. It is normally empty. Only a `package_source` report may use it, and only for the explicit nonstandard frame-count or timing flags. The underlying technical check remains an objective fact and therefore stays `false` outside the default range. Each override records the check ID, CLI flag source, actual value, and default range; technical status is computed from passed checks plus valid explicit overrides.
+
 ## Identity
 
 - Compare every anchor and the contact sheet with the reference image.
@@ -68,3 +74,4 @@ Run `scripts/record_visual_validation.py` against `validation/report.json`, an o
 - Set `deliverable_ready` to true only when both `technical_validation` and `visual_validation` pass.
 - Treat every repack as a new validation boundary. The candidate report resets visual validation to pending.
 - Require the report fingerprint to still match the files being validated. Regenerate instead of passing a stale report after any artifact changes.
+- Replace the report atomically after validation state and notes are complete. No concurrent-change guard is required for this local maker workflow.

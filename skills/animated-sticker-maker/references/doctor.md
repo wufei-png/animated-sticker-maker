@@ -32,6 +32,8 @@ Ambiguous or unrecognized directories are `invalid`. Package diagnosis includes 
 
 Doctor re-opens packaged PNG, WebP, GIF, and preview media and checks their observable dimensions, frame count, timing, loop, Alpha, paths, hashes, report evidence, and upstream bindings. Motion diagnosis is schema-only; packaging remains responsible for validating working frame and reference files.
 
+Doctor accepts only the current motion and Validation Report schemas. An older or unversioned report is `invalid` and must be regenerated; Doctor does not migrate artifacts.
+
 ## JSON
 
 Pass `--json` before the target:

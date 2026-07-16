@@ -14,6 +14,11 @@ All notable changes to this project are documented here.
 - Make Review Page playback control the actual decoded WebP/GIF target, move semantic hold to timeline evidence, and pair true-size with zoomed 50×50 inspection.
 - Add agent-selected Chinese/English Review Page localization and explain the semantic-hold marker inline.
 - Remove unused cover artwork and consolidate repeated integrity helpers.
+- Add Validation Report schema v1 and accept only the current motion/report formats without compatibility migration.
+- Keep nonstandard package checks factual and record allowed deviations separately as policy overrides.
+- Replace GIF, preview, and export report transactionally so failed exports preserve the previous validated set.
+- Write visual-validation updates atomically and keep Review HTML free of absolute host paths.
+- Split Review media/assets, GIF export stages, and Doctor checks into focused runtime modules while preserving the public CLI behavior.
 
 ## [0.8.1] - 2026-07-16
 

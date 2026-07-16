@@ -93,7 +93,9 @@ output/<name>/
 
 An artifact is deliverable only when both `technical_validation` and `visual_validation` pass and its report records `deliverable_ready: true`.
 
-Motion plans use the strict `schema_version: 2` contract. Optional render tracks record an explicit ordered frame array instead of relying on directory filename sorting; older motion schema versions are intentionally rejected.
+The current persisted formats are motion plan schema `2` and Validation Report schema `1`. The Skill supports only these current formats and has no compatibility parser or migration layer. Validation Report v1 is a closed per-scope contract: missing, unknown, or wrongly typed evidence fields are rejected. Remove an unsupported legacy export set before regenerating it with the current Skill. Doctor's public JSON envelope remains schema `1`. The internal Review Page model is deliberately unversioned, and its separated HTML/CSS/JavaScript sources still produce one offline HTML document with the interface assets embedded.
+
+Optional render tracks record an explicit ordered frame array instead of relying on directory filename sorting. Project releases continue to use normal SemVer independently from artifact schema versions.
 
 ## Deterministic tools
 

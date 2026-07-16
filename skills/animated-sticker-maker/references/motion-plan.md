@@ -71,7 +71,7 @@ When deterministic interpolation or compositing adds visible value, add this opt
 
 Planning rules:
 
-- Use `schema_version: 2`; older schema versions are rejected. Include the complete minimum shape above: identity, generation, transparency, and per-frame descriptions are required workflow evidence, not optional annotations. Keep `loop` boolean, `canvas` as two positive integers, every frame path relative, and every `duration_ms` a positive integer; packaging rejects ambiguous coercions such as `"loop": "false"`.
+- Use the current `schema_version: 2` contract only. There is no legacy parser or migration layer. Include the complete minimum shape above: identity, generation, transparency, and per-frame descriptions are required workflow evidence, not optional annotations. Keep `loop` boolean, `canvas` as two positive integers, every frame path relative, and every `duration_ms` a positive integer; packaging rejects ambiguous coercions such as `"loop": "false"`.
 - Commit to one primary semantic beat. Treat secondary effects as support.
 - Use 4–8 unique frames by default; do not duplicate identical frames to simulate a hold. Increase `duration_ms` instead.
 - Reserve 400–700 ms for the frame that communicates the meaning most clearly.

@@ -13,7 +13,7 @@ A platform-neutral animated sticker artifact containing normalized sources, the 
 _Avoid_: Build directory, output folder
 
 **Validation Report**:
-A fingerprint-bound record of technical and visual validation for one exact package, render track, or export.
+A schema-versioned, fingerprint-bound record of technical facts, explicit policy overrides, and visual validation for one exact package, render track, or export.
 _Avoid_: Approval, review result
 
 **Artifact Boundary**:

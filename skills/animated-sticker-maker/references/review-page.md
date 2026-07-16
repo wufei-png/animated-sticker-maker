@@ -47,7 +47,7 @@ The Animation Inspection Light Table shows:
 - existing visual-validation notes;
 - a collapsed technical section containing state, constraints, checks, provenance, paths, and hashes.
 
-The page uses only embedded CSS and JavaScript. Source and render PNG media remains linked by contained relative paths. A verified external reference and decoded encoded-artifact frames are embedded in the HTML.
+The implementation keeps the HTML template, CSS, and JavaScript in separate Skill assets for maintainability, then embeds those interface assets into one offline HTML document. Source and render PNG media remains linked by contained relative paths. A verified external reference and decoded encoded-artifact frames are embedded in the HTML. The generated model and HTML use report-relative or package-relative display names and do not expose absolute host paths.
 
 The semantic hold is an inspection anchor, not an automatic playback pause. When `motion.semantic_hold_frame` is declared, the marker uses the midpoint of that authored frame's time span and maps that timestamp onto the current review track. Without a declaration, it falls back to the midpoint of the longest authored frame. The page states which rule was used.
 

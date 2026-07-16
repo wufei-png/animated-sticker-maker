@@ -17,7 +17,7 @@ Require only:
 1. `reference_image`: one static image containing a clear primary subject.
 2. `prompt`: natural language describing the intended expression, action, text, loop, or target platform.
 
-Support people, pets, mascots, illustrations, objects, and logos. If the image has multiple plausible subjects and the prompt does not identify one, ask once before generating. Do not promise stable multi-subject acting, scene animation, or camera motion in v1.
+Support people, pets, mascots, illustrations, objects, and logos. If the image has multiple plausible subjects and the prompt does not identify one, ask once before generating. Do not promise stable multi-subject acting, scene animation, or camera motion.
 
 Produce one sticker per invocation. For a multi-sticker series, keep the shared identity specification, pack ordering, naming, and release-level brand assets in the owning project, then invoke this Skill separately for each sticker that needs its workflow. Do not turn project-specific pack orchestration into a generic Skill feature.
 
@@ -108,7 +108,9 @@ Complete this step only when `sticker.webp`, copied source frames, `motion.json`
 
 Packaging requires the complete motion schema v2 workflow evidence, rewrites copied keyframes as real PNG files at canonical `frames/000.png`, `frames/001.png`, and so on, and rewrites matching semantic-hold references with them. Treat the packaged `source/motion.json` as the self-contained source of truth; do not retain paths that only resolve in the working directory.
 
-The packager re-opens `sticker.webp` to verify its format, canvas, frame count, loop setting, and transparency. Native pixel-art packages use lossless WebP encoding. The generated report binds the normalized motion, reference metadata, source frames, and encoded WebP with an artifact fingerprint; any later change invalidates the recorded visual validation.
+The packager re-opens `sticker.webp` to verify its format, canvas, frame count, loop setting, and transparency. Native pixel-art packages use lossless WebP encoding. The generated report binds the normalized motion, reference metadata, source frames, and encoded WebP with an artifact fingerprint; any later change invalidates the recorded visual validation. Validation Reports use the current schema `1` only. Regenerate older or unversioned reports instead of migrating them.
+
+Nonstandard frame-count and timing flags are policy overrides, not altered facts. Their objective checks remain false when the values are outside the defaults; `policy_overrides` separately records the flag source, actual value, and default range while allowing technical validation to pass.
 
 Packaging is transactional. It builds and validates a candidate in a sibling staging directory, replaces the existing usable package only after technical validation succeeds, and writes the latest technically failed candidate to `<output>.failed/`. A successful replacement removes that failed candidate. A declared `semantic_hold_frame` must name exactly one authored keyframe.
 
@@ -157,6 +159,8 @@ python <skill-dir>/scripts/export_platform_gif.py \
 ```
 
 The exporter requires `technical_validation`, `visual_validation`, and `deliverable_ready` to pass. A top-level `status: pass` alone is insufficient. It preserves source timing, applies the resampling policy recorded in `motion.json`, uses one shared GIF palette to reduce frame-to-frame color shimmer, chooses the highest tested color count that meets the byte limit, and records source validation, export parameters, and hashes. Omit preview arguments when the platform does not require one. `--spec-url` and `--verified-on` are mandatory provenance. Use `--allow-unvalidated` only for explicit diagnostics; its report is marked `diagnostic_unvalidated` and cannot become deliverable. If no palette candidate fits, change size, timing, or frame count only through an explicit validated decision; do not silently degrade the semantic hold.
+
+GIF, optional preview, and export report form one transaction. Generate and validate the complete candidate set in staging, then replace the previous set together. A failed attempt must leave every previous export artifact and its report unchanged; a successful replacement removes artifacts, such as an old preview, that are no longer part of the new report.
 
 Every normal export starts at `pending_visual_validation`, even when its source package and technical constraints pass. Inspect the actual GIF and preview, then record visual validation against the generated report with the same `record_visual_validation.py` command. The report sets `deliverable_ready: true` only while its fingerprint still matches those export files.
 
