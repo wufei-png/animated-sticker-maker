@@ -93,6 +93,8 @@ output/<name>/
 
 An artifact is deliverable only when both `technical_validation` and `visual_validation` pass and its report records `deliverable_ready: true`.
 
+Motion plans use the strict `schema_version: 2` contract. Optional render tracks record an explicit ordered frame array instead of relying on directory filename sorting; older motion schema versions are intentionally rejected.
+
 ## Deterministic tools
 
 The Skill resolves these paths relative to its own `SKILL.md`:

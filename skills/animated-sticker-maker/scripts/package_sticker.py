@@ -9,6 +9,7 @@ import hashlib
 import json
 import math
 import shutil
+import struct
 import tempfile
 from pathlib import Path
 
@@ -20,6 +21,7 @@ from artifact_integrity import (
     render_track_fingerprint,
     sha256_path,
 )
+from motion_schema import validate_motion, validate_render_pixel_budget
 
 
 DEFAULT_SIZE = (1024, 1024)
@@ -29,10 +31,6 @@ RESAMPLING_FILTERS = {
     "lanczos": Image.Resampling.LANCZOS,
     "nearest": Image.Resampling.NEAREST,
 }
-
-
-def is_positive_int(value: object) -> bool:
-    return isinstance(value, int) and not isinstance(value, bool) and value > 0
 
 
 def parse_size(value: str) -> tuple[int, int]:
@@ -50,73 +48,7 @@ def parse_size(value: str) -> tuple[int, int]:
 
 def load_motion(path: Path) -> dict[str, object]:
     motion = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(motion, dict):
-        raise ValueError("motion.json must contain a JSON object")
-    schema_version = motion.get("schema_version", 1)
-    if schema_version != 1:
-        raise ValueError("motion.schema_version must be 1")
-    motion["schema_version"] = 1
-    loop = motion.get("loop", True)
-    if not isinstance(loop, bool):
-        raise ValueError("motion.loop must be a boolean")
-    motion["loop"] = loop
-    canvas = motion.get("canvas")
-    if canvas is not None and not (
-        isinstance(canvas, list)
-        and len(canvas) == 2
-        and all(is_positive_int(value) for value in canvas)
-    ):
-        raise ValueError("motion.canvas must contain two positive integers")
-    frames = motion.get("frames")
-    if not isinstance(frames, list) or not frames:
-        raise ValueError("motion.json must contain a non-empty frames array")
-    for index, frame in enumerate(frames):
-        if not isinstance(frame, dict):
-            raise ValueError(f"frames[{index}] must be an object")
-        if not isinstance(frame.get("file"), str) or not frame["file"]:
-            raise ValueError(f"frames[{index}].file must be a path string")
-        duration = frame.get("duration_ms")
-        if not is_positive_int(duration):
-            raise ValueError(f"frames[{index}].duration_ms must be a positive integer")
-    resampling = motion.get("resampling", "lanczos")
-    if resampling not in RESAMPLING_FILTERS:
-        raise ValueError("motion.resampling must be 'lanczos' or 'nearest'")
-    motion["resampling"] = resampling
-    render = motion.get("render")
-    if render is not None:
-        if not isinstance(render, dict):
-            raise ValueError("motion.render must be an object")
-        frame_dir = render.get("frame_dir")
-        if not isinstance(frame_dir, str) or not frame_dir:
-            raise ValueError("motion.render.frame_dir must be a relative path string")
-        relative = Path(frame_dir)
-        if relative.is_absolute() or ".." in relative.parts:
-            raise ValueError("motion.render.frame_dir must stay beneath the motion directory")
-        target_fps = render.get("target_fps")
-        if not is_positive_int(target_fps) or target_fps > 100:
-            raise ValueError(
-                "motion.render.target_fps must be an integer from 1 to 100"
-            )
-        frame_count = render.get("frame_count")
-        if not is_positive_int(frame_count):
-            raise ValueError("motion.render.frame_count must be a positive integer")
-        frame_durations = render.get("frame_durations_ms")
-        if not isinstance(frame_durations, list) or not all(
-            is_positive_int(value) for value in frame_durations
-        ):
-            raise ValueError(
-                "motion.render.frame_durations_ms must contain positive integers"
-            )
-        if len(frame_durations) != frame_count:
-            raise ValueError(
-                "motion.render.frame_count must match frame_durations_ms"
-            )
-        total_duration = render.get("total_duration_ms")
-        if not is_positive_int(total_duration) or total_duration != sum(frame_durations):
-            raise ValueError(
-                "motion.render.total_duration_ms must equal the frame duration sum"
-            )
-    return motion
+    return validate_motion(motion, packaged=False)
 
 
 def resolve_frame(frames_dir: Path, file_value: str) -> Path:
@@ -133,18 +65,21 @@ def resolve_frame(frames_dir: Path, file_value: str) -> Path:
     raise FileNotFoundError(f"frame not found for {file_value!r} in {frames_dir}")
 
 
-def resolve_render_frames(motion_path: Path, frame_dir_value: str) -> list[Path]:
+def resolve_render_frames(
+    motion_path: Path, frame_entries: list[dict[str, object]]
+) -> list[Path]:
     root = motion_path.parent.resolve()
-    frame_dir = (root / frame_dir_value).resolve()
-    if not frame_dir.is_relative_to(root):
-        raise ValueError("motion.render.frame_dir must not escape through a symbolic link")
-    if not frame_dir.is_dir():
-        raise FileNotFoundError(f"render frame directory not found: {frame_dir}")
-    frames = sorted(frame_dir.glob("*.png"))
-    if not frames:
-        raise ValueError("motion.render.frame_dir contains no PNG frames")
-    if any(not path.resolve().is_relative_to(frame_dir) for path in frames):
-        raise ValueError("render frames must not escape through symbolic links")
+    frames: list[Path] = []
+    for index, entry in enumerate(frame_entries):
+        relative = Path(str(entry["file"]))
+        path = root / relative
+        if not path.is_file():
+            raise FileNotFoundError(f"render frame not found: {path}")
+        if not path.resolve().is_relative_to(root):
+            raise ValueError(
+                f"motion.render.frames[{index}].file must not escape through a symbolic link"
+            )
+        frames.append(path)
     return frames
 
 
@@ -263,11 +198,40 @@ def make_contact_sheet(
     sheet.save(path)
 
 
+def webp_animation_durations(path: Path) -> list[int]:
+    """Read ANMF durations directly from an animated WebP RIFF container."""
+    data = path.read_bytes()
+    if len(data) < 12 or data[:4] != b"RIFF" or data[8:12] != b"WEBP":
+        raise ValueError("encoded sticker is not a valid WebP RIFF container")
+    riff_size = struct.unpack_from("<I", data, 4)[0]
+    container_end = riff_size + 8
+    if container_end > len(data):
+        raise ValueError("encoded WebP RIFF container is truncated")
+    durations: list[int] = []
+    offset = 12
+    while offset + 8 <= container_end:
+        chunk_type = data[offset : offset + 4]
+        chunk_size = struct.unpack_from("<I", data, offset + 4)[0]
+        payload_start = offset + 8
+        payload_end = payload_start + chunk_size
+        if payload_end > container_end:
+            raise ValueError("encoded WebP contains a truncated chunk")
+        if chunk_type == b"ANMF":
+            if chunk_size < 16:
+                raise ValueError("encoded WebP contains a malformed ANMF chunk")
+            durations.append(
+                int.from_bytes(data[payload_start + 12 : payload_start + 15], "little")
+            )
+        offset = payload_end + (chunk_size % 2)
+    return durations
+
+
 def validate_sticker_webp(
     path: Path,
     expected_size: tuple[int, int],
     expected_frame_count: int,
     expected_loop_count: int,
+    expected_durations: list[int],
 ) -> dict[str, bool]:
     """Re-open the encoded deliverable and verify its observable structure."""
     with Image.open(path) as image:
@@ -286,6 +250,9 @@ def validate_sticker_webp(
                 np.any(alpha == 0) and np.any(alpha > 0)
             )
         checks["sticker_transparency_preserved"] = transparency_preserved
+    checks["sticker_durations_match_source"] = (
+        webp_animation_durations(path) == expected_durations
+    )
     return checks
 
 
@@ -318,21 +285,11 @@ def prepare_webp_frames(frames: list[Image.Image]) -> tuple[list[Image.Image], b
     return guarded, True
 
 
-def clean_output(output: Path) -> tuple[Path, Path]:
+def initialize_output(output: Path) -> tuple[Path, Path]:
+    """Create the empty output tree inside the transaction's staging directory."""
     source = output / "source"
     validation = output / "validation"
     frame_output = source / "frames"
-    for stale_directory in (
-        frame_output,
-        source / "rendered-frames",
-        validation,
-        output / "exports",
-    ):
-        if stale_directory.exists():
-            shutil.rmtree(stale_directory)
-    stale_sticker = output / "sticker.webp"
-    if stale_sticker.exists():
-        stale_sticker.unlink()
     frame_output.mkdir(parents=True, exist_ok=True)
     validation.mkdir(parents=True, exist_ok=True)
     return frame_output, validation
@@ -340,10 +297,8 @@ def clean_output(output: Path) -> tuple[Path, Path]:
 
 def build_candidate(args: argparse.Namespace) -> int:
     motion = load_motion(args.motion)
-    canvas = motion.get("canvas")
-    if canvas is None:
-        motion["canvas"] = list(args.expected_size)
-    elif tuple(canvas) != args.expected_size:
+    canvas = motion["canvas"]
+    if tuple(canvas) != args.expected_size:
         raise ValueError(
             f"motion.canvas {canvas} does not match --expected-size {args.expected_size}"
         )
@@ -388,7 +343,7 @@ def build_candidate(args: argparse.Namespace) -> int:
     }
     technical_pass = all(checks.values())
 
-    frame_output, validation_dir = clean_output(args.output)
+    frame_output, validation_dir = initialize_output(args.output)
     source_dir = args.output / "source"
     reference = reference_metadata(
         args.reference_image,
@@ -415,20 +370,31 @@ def build_candidate(args: argparse.Namespace) -> int:
     render_report = None
     render = motion.get("render")
     if isinstance(render, dict):
-        render_paths = resolve_render_frames(args.motion, str(render["frame_dir"]))
+        render_entries = render["frames"]
+        assert isinstance(render_entries, list)
+        render_paths = resolve_render_frames(args.motion, render_entries)
         render_frames: list[Image.Image] = []
         render_source_modes: list[str] = []
+        render_input_pixels = 0
         for path in render_paths:
             with Image.open(path) as source:
+                render_input_pixels += source.width * source.height
+                validate_render_pixel_budget(render_input_pixels)
                 render_source_modes.append(source.mode)
                 render_frames.append(source.convert("RGBA"))
-        render_durations = list(render["frame_durations_ms"])
+        render_durations = [int(entry["duration_ms"]) for entry in render_entries]
         render_metrics = [alpha_metrics(frame) for frame in render_frames]
         render_checks = {
-            "frame_count_matches_metadata": len(render_frames) == render["frame_count"],
+            "frame_count_matches_ordered_entries": len(render_frames)
+            == len(render_entries),
             "duration_count_matches_frames": len(render_durations) == len(render_frames),
-            "total_duration_matches_metadata": sum(render_durations)
-            == render["total_duration_ms"],
+            "total_duration_matches_authored_keyframes": sum(render_durations)
+            == total_duration,
+            "target_fps_matches_timeline": abs(
+                len(render_frames)
+                - sum(render_durations) * int(render["target_fps"]) / 1000
+            )
+            <= 1,
             "source_frames_are_rgba": all(mode == "RGBA" for mode in render_source_modes),
             "all_frames_match_expected_size": all(
                 frame.size == args.expected_size for frame in render_frames
@@ -447,13 +413,17 @@ def build_candidate(args: argparse.Namespace) -> int:
         render_output.mkdir(parents=True, exist_ok=True)
         for index, frame in enumerate(render_frames):
             frame.save(render_output / f"{index:04d}.png", format="PNG")
-        packaged_motion["render"] = {
-            "frame_dir": "rendered-frames",
+        packaged_render: dict[str, object] = {
             "target_fps": render["target_fps"],
-            "frame_count": len(render_frames),
-            "frame_durations_ms": render_durations,
-            "total_duration_ms": sum(render_durations),
+            "frames": [],
         }
+        packaged_render_frames = packaged_render["frames"]
+        assert isinstance(packaged_render_frames, list)
+        for index, entry in enumerate(render_entries):
+            packaged_entry = copy.deepcopy(entry)
+            packaged_entry["file"] = f"rendered-frames/{index:04d}.png"
+            packaged_render_frames.append(packaged_entry)
+        packaged_motion["render"] = packaged_render
         make_contact_sheet(
             render_frames,
             render_durations,
@@ -530,6 +500,7 @@ def build_candidate(args: argparse.Namespace) -> int:
                     args.expected_size,
                     len(frames),
                     loop_count,
+                    durations,
                 )
             )
         except (OSError, ValueError) as exc:

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import sys
 import tempfile
@@ -12,36 +11,16 @@ from unittest import mock
 
 from PIL import Image, features
 
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-SKILL_DIR = REPO_ROOT / "skills" / "animated-sticker-maker"
-SCRIPTS_DIR = SKILL_DIR / "scripts"
-if str(SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS_DIR))
-
-
-def load_script(name: str):
-    path = SKILL_DIR / "scripts" / f"{name}.py"
-    spec = importlib.util.spec_from_file_location(name, path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-package_sticker = load_script("package_sticker")
-export_platform_gif = load_script("export_platform_gif")
-record_visual_validation = load_script("record_visual_validation")
-artifact_integrity = load_script("artifact_integrity")
-chroma_key = load_script("chroma_key")
-
-
-def make_frame(path: Path, color: tuple[int, int, int, int], size: int = 16) -> None:
-    image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    for y in range(2, size - 2):
-        for x in range(2, size - 2):
-            image.putpixel((x, y), color)
-    image.save(path)
+from support import (
+    artifact_integrity,
+    export_platform_gif,
+    make_frame,
+    motion_plan,
+    motion_schema,
+    package_sticker,
+    packaged_motion,
+    record_visual_validation,
+)
 
 
 class PackageStickerTests(unittest.TestCase):
@@ -73,13 +52,13 @@ class PackageStickerTests(unittest.TestCase):
             motion_path = root / "motion.json"
             motion_path.write_text(
                 json.dumps(
-                    {
-                        "loop": True,
-                        "semantic_hold_frame": "hold.png",
-                        "frames": [
-                            {"file": name, "duration_ms": 300} for name in names
+                    motion_plan(
+                        [
+                            {"file": name, "duration_ms": 300}
+                            for name in names
                         ],
-                    }
+                        semantic_hold_frame="hold.png",
+                    )
                 ),
                 encoding="utf-8",
             )
@@ -113,7 +92,7 @@ class PackageStickerTests(unittest.TestCase):
                 [f"frames/{index:03d}.png" for index in range(4)],
             )
             self.assertEqual(packaged["semantic_hold_frame"], "frames/002.png")
-            self.assertEqual(packaged["schema_version"], 1)
+            self.assertEqual(packaged["schema_version"], 2)
             self.assertEqual(packaged["loop"], True)
             self.assertEqual(packaged["canvas"], [16, 16])
             self.assertEqual(packaged["resampling"], "lanczos")
@@ -167,12 +146,12 @@ class PackageStickerTests(unittest.TestCase):
             motion_path = root / "motion.json"
             motion_path.write_text(
                 json.dumps(
-                    {
-                        "frames": [
+                    motion_plan(
+                        [
                             {"file": f"{index}.png", "duration_ms": 300}
                             for index in range(4)
                         ]
-                    }
+                    )
                 ),
                 encoding="utf-8",
             )
@@ -212,7 +191,10 @@ class PackageStickerTests(unittest.TestCase):
             frames_dir.mkdir()
             render_dir.mkdir()
             for index in range(4):
-                make_frame(frames_dir / f"{index}.png", (20 + index, 80, 70, 255))
+                make_frame(
+                    frames_dir / f"{index}.png",
+                    (20 + index * 30, 80 + index * 20, 70, 255),
+                )
             for index in range(6):
                 make_frame(
                     render_dir / f"{index}.png",
@@ -221,20 +203,23 @@ class PackageStickerTests(unittest.TestCase):
             motion_path = root / "motion.json"
             motion_path.write_text(
                 json.dumps(
-                    {
-                        "resampling": "nearest",
-                        "frames": [
+                    motion_plan(
+                        [
                             {"file": f"{index}.png", "duration_ms": 300}
                             for index in range(4)
                         ],
-                        "render": {
-                            "frame_dir": "render",
+                        resampling="nearest",
+                        render={
                             "target_fps": 5,
-                            "frame_count": 6,
-                            "frame_durations_ms": [200] * 6,
-                            "total_duration_ms": 1200,
+                            "frames": [
+                                {
+                                    "file": f"render/{index}.png",
+                                    "duration_ms": 200,
+                                }
+                                for index in range(6)
+                            ],
                         },
-                    }
+                    )
                 ),
                 encoding="utf-8",
             )
@@ -254,8 +239,12 @@ class PackageStickerTests(unittest.TestCase):
             packaged = json.loads(
                 (output / "source" / "motion.json").read_text(encoding="utf-8")
             )
-            self.assertEqual(packaged["render"]["frame_dir"], "rendered-frames")
             self.assertEqual(packaged["render"]["target_fps"], 5)
+            self.assertEqual(set(packaged["render"]), {"target_fps", "frames"})
+            self.assertEqual(
+                [entry["file"] for entry in packaged["render"]["frames"]],
+                [f"rendered-frames/{index:04d}.png" for index in range(6)],
+            )
             self.assertEqual(
                 len(list((output / "source" / "rendered-frames").glob("*.png"))),
                 6,
@@ -284,12 +273,12 @@ class PackageStickerTests(unittest.TestCase):
             motion_path = root / "motion.json"
             motion_path.write_text(
                 json.dumps(
-                    {
-                        "frames": [
+                    motion_plan(
+                        [
                             {"file": f"{index}.png", "duration_ms": 300}
                             for index in range(4)
                         ]
-                    }
+                    )
                 ),
                 encoding="utf-8",
             )
@@ -328,14 +317,13 @@ class PackageStickerTests(unittest.TestCase):
             motion_path = root / "motion.json"
             motion_path.write_text(
                 json.dumps(
-                    {
-                        "loop": True,
-                        "semantic_hold_frame": "orphan.png",
-                        "frames": [
+                    motion_plan(
+                        [
                             {"file": f"{index}.png", "duration_ms": 300}
                             for index in range(4)
                         ],
-                    }
+                        semantic_hold_frame="orphan.png",
+                    )
                 ),
                 encoding="utf-8",
             )
@@ -358,15 +346,229 @@ class PackageStickerTests(unittest.TestCase):
             path = Path(temporary) / "motion.json"
             path.write_text(
                 json.dumps(
-                    {
-                        "loop": "false",
-                        "frames": [{"file": "0.png", "duration_ms": 300}],
-                    }
+                    motion_plan(
+                        [{"file": "0.png", "duration_ms": 300}],
+                        loop="false",
+                    )
                 ),
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(ValueError, "motion.loop must be a boolean"):
                 package_sticker.load_motion(path)
+
+    def test_schema_v2_requires_the_portable_workflow_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "motion.json"
+            motion = motion_plan([{"file": "0.png", "duration_ms": 1200}])
+            motion["schema_version"] = 1
+            path.write_text(json.dumps(motion), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "schema_version must be 2"):
+                package_sticker.load_motion(path)
+
+            motion["schema_version"] = 2
+            motion.pop("identity_lock")
+            path.write_text(json.dumps(motion), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "identity_lock must be an object"):
+                package_sticker.load_motion(path)
+
+            motion = motion_plan([{"file": "0.png", "duration_ms": 1200}])
+            motion["transparency"] = {"strategy": "existing-alpha"}
+            path.write_text(json.dumps(motion), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "work_color must be present"):
+                package_sticker.load_motion(path)
+
+    def test_artifact_fingerprint_rejects_old_packaged_schema(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            package = Path(temporary) / "package"
+            frames_dir = package / "source" / "frames"
+            frames_dir.mkdir(parents=True)
+            make_frame(frames_dir / "000.png", (20, 80, 70, 255))
+            motion = packaged_motion(
+                [{"file": "frames/000.png", "duration_ms": 1200}]
+            )
+            motion["schema_version"] = 1
+            (package / "source" / "motion.json").write_text(
+                json.dumps(motion),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "schema_version must be 2"):
+                artifact_integrity.package_fingerprint(package)
+
+    def test_render_track_uses_declared_order_not_filename_sorting(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            frames_dir = root / "frames"
+            render_dir = root / "render"
+            frames_dir.mkdir()
+            render_dir.mkdir()
+            for index in range(4):
+                make_frame(
+                    frames_dir / f"{index}.png",
+                    (20 + index * 30, 80 + index * 20, 70, 255),
+                )
+            render_colors = {
+                "1.png": (10, 0, 0, 255),
+                "2.png": (20, 0, 0, 255),
+                "10.png": (100, 0, 0, 255),
+            }
+            for name, color in render_colors.items():
+                make_frame(render_dir / name, color)
+            declared_names = ["1.png", "2.png", "10.png"]
+            motion_path = root / "motion.json"
+            motion_path.write_text(
+                json.dumps(
+                    motion_plan(
+                        [
+                            {"file": f"{index}.png", "duration_ms": 300}
+                            for index in range(4)
+                        ],
+                        render={
+                            "target_fps": 2,
+                            "frames": [
+                                {
+                                    "file": f"render/{name}",
+                                    "duration_ms": 400,
+                                }
+                                for name in declared_names
+                            ],
+                        },
+                    )
+                ),
+                encoding="utf-8",
+            )
+            args = argparse.Namespace(
+                frames_dir=frames_dir,
+                motion=motion_path,
+                reference_image=frames_dir / "0.png",
+                include_reference=False,
+                output=root / "package",
+                expected_size=(16, 16),
+                quality=92,
+                allow_nonstandard_frame_count=False,
+                allow_nonstandard_timing=False,
+            )
+            self.assertEqual(package_sticker.package(args), 0)
+            actual = []
+            for index in range(3):
+                with Image.open(
+                    args.output / "source" / "rendered-frames" / f"{index:04d}.png"
+                ) as frame:
+                    actual.append(frame.getpixel((8, 8)))
+            self.assertEqual(actual, [render_colors[name] for name in declared_names])
+
+    def test_render_track_rejects_inconsistent_fps_and_excessive_frame_count(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "motion.json"
+            mismatched_duration = motion_plan(
+                [{"file": "0.png", "duration_ms": 1200}],
+                render={
+                    "target_fps": 4,
+                    "frames": [
+                        {"file": f"render/{index}.png", "duration_ms": 250}
+                        for index in range(4)
+                    ],
+                },
+            )
+            path.write_text(json.dumps(mismatched_duration), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "same total duration"):
+                package_sticker.load_motion(path)
+
+            motion = motion_plan(
+                [{"file": "0.png", "duration_ms": 1200}],
+                render={
+                    "target_fps": 30,
+                    "frames": [
+                        {"file": f"render/{index}.png", "duration_ms": 300}
+                        for index in range(4)
+                    ],
+                },
+            )
+            path.write_text(json.dumps(motion), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "target_fps is inconsistent"):
+                package_sticker.load_motion(path)
+
+            motion["render"] = {
+                "target_fps": 100,
+                "frames": [
+                    {"file": f"render/{index}.png", "duration_ms": 10}
+                    for index in range(241)
+                ],
+            }
+            path.write_text(json.dumps(motion), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "at most 240"):
+                package_sticker.load_motion(path)
+
+            self.assertEqual(
+                motion_schema.validate_render_pixel_budget(64 * 1024 * 1024),
+                64 * 1024 * 1024,
+            )
+            with self.assertRaisesRegex(ValueError, "64M aggregate"):
+                motion_schema.validate_render_pixel_budget(65 * 1024 * 1024)
+
+            motion = motion_plan(
+                [{"file": "0.png", "duration_ms": 1200}],
+                render={
+                    "target_fps": 1,
+                    "frames": [{"file": "render/0.png", "duration_ms": 1200}],
+                    "frame_count": 1,
+                },
+            )
+            path.write_text(json.dumps(motion), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "removed schema v1 fields"):
+                package_sticker.load_motion(path)
+
+    def test_render_track_limits_actual_input_pixels_before_conversion(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            frames_dir = root / "frames"
+            render_dir = root / "render"
+            frames_dir.mkdir()
+            render_dir.mkdir()
+            for index in range(4):
+                make_frame(frames_dir / f"{index}.png", (20 + index, 80, 70, 255))
+            for index in range(2):
+                make_frame(
+                    render_dir / f"{index}.png",
+                    (100 + index, 80, 70, 255),
+                    size=20,
+                )
+            motion_path = root / "motion.json"
+            motion_path.write_text(
+                json.dumps(
+                    motion_plan(
+                        [
+                            {"file": f"{index}.png", "duration_ms": 300}
+                            for index in range(4)
+                        ],
+                        render={
+                            "target_fps": 2,
+                            "frames": [
+                                {
+                                    "file": f"render/{index}.png",
+                                    "duration_ms": 600,
+                                }
+                                for index in range(2)
+                            ],
+                        },
+                    )
+                ),
+                encoding="utf-8",
+            )
+            args = argparse.Namespace(
+                frames_dir=frames_dir,
+                motion=motion_path,
+                reference_image=frames_dir / "0.png",
+                include_reference=False,
+                output=root / "package",
+                expected_size=(16, 16),
+                quality=92,
+                allow_nonstandard_frame_count=False,
+                allow_nonstandard_timing=False,
+            )
+            budget_globals = package_sticker.validate_render_pixel_budget.__globals__
+            with mock.patch.dict(budget_globals, {"MAX_RENDER_PIXELS": 600}):
+                with self.assertRaisesRegex(ValueError, "64M aggregate"):
+                    package_sticker.package(args)
 
     @unittest.skipUnless(features.check("webp"), "Pillow has no WebP support")
     def test_packaged_png_is_real_png_even_when_input_is_webp(self) -> None:
@@ -381,7 +583,7 @@ class PackageStickerTests(unittest.TestCase):
                 entries.append({"file": path.name, "duration_ms": 300})
             motion_path = root / "motion.json"
             motion_path.write_text(
-                json.dumps({"loop": True, "frames": entries}),
+                json.dumps(motion_plan(entries)),
                 encoding="utf-8",
             )
             output = root / "package"
@@ -397,33 +599,17 @@ class PackageStickerTests(unittest.TestCase):
                 allow_nonstandard_timing=False,
             )
             self.assertEqual(package_sticker.package(args), 0)
+            report = json.loads(
+                (output / "validation" / "report.json").read_text(encoding="utf-8")
+            )
+            self.assertTrue(
+                report["technical_validation"]["checks"][
+                    "sticker_durations_match_source"
+                ]
+            )
             with Image.open(output / "source" / "frames" / "000.png") as packaged:
                 self.assertEqual(packaged.format, "PNG")
                 self.assertEqual(packaged.mode, "RGBA")
-
-
-class ChromaKeyTests(unittest.TestCase):
-    def test_explicit_zero_threshold_is_not_replaced_by_default(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            source = root / "source.png"
-            output = root / "output.png"
-            image = Image.new("RGB", (4, 4), (255, 0, 255))
-            image.putpixel((2, 2), (250, 0, 255))
-            image.save(source)
-            argv = [
-                "chroma_key.py",
-                str(source),
-                str(output),
-                "--key",
-                "#FF00FF",
-                "--transparent-threshold",
-                "0",
-            ]
-            with mock.patch.object(sys, "argv", argv):
-                chroma_key.main()
-            with Image.open(output) as result:
-                self.assertGreater(result.getpixel((2, 2))[3], 0)
 
 
 class ExportPlatformGifTests(unittest.TestCase):
@@ -444,20 +630,22 @@ class ExportPlatformGifTests(unittest.TestCase):
             )
         (package / "source" / "motion.json").write_text(
             json.dumps(
-                {
-                    "loop": True,
-                    "frames": [
+                packaged_motion(
+                    [
                         {"file": "frames/000.png", "duration_ms": 600},
                         {"file": "frames/001.png", "duration_ms": 600},
                     ],
-                    "render": {
-                        "frame_dir": "rendered-frames",
+                    render={
                         "target_fps": 4,
-                        "frame_count": 4,
-                        "frame_durations_ms": [300, 300, 300, 300],
-                        "total_duration_ms": 1200,
+                        "frames": [
+                            {
+                                "file": f"rendered-frames/{index:03d}.png",
+                                "duration_ms": 300,
+                            }
+                            for index in range(4)
+                        ],
                     },
-                }
+                )
             ),
             encoding="utf-8",
         )
@@ -467,8 +655,20 @@ class ExportPlatformGifTests(unittest.TestCase):
                     "status": "pass",
                     "artifact_scope": "package_source",
                     "artifact_fingerprint": artifact_integrity.package_fingerprint(package),
-                    "technical_validation": {"status": "pass"},
-                    "visual_validation": {"status": "pass"},
+                    "technical_validation": {
+                        "status": "pass",
+                        "checks": {"package_is_valid": True},
+                    },
+                    "visual_validation": {
+                        "status": "pass",
+                        "notes": {
+                            "identity": "stable",
+                            "meaning": "clear",
+                            "loop": "clean",
+                            "alpha": "clean",
+                            "small_size": "readable",
+                        },
+                    },
                     "deliverable_ready": True,
                 }
             ),
@@ -485,7 +685,16 @@ class ExportPlatformGifTests(unittest.TestCase):
                         "status": "pass",
                         "checks": {"frame_count": True, "duration": True},
                     },
-                    "visual_validation": {"status": "pass"},
+                    "visual_validation": {
+                        "status": "pass",
+                        "notes": {
+                            "identity": "stable",
+                            "meaning": "clear",
+                            "loop": "clean",
+                            "alpha": "clean",
+                            "small_size": "readable",
+                        },
+                    },
                     "deliverable_ready": True,
                 }
             ),
@@ -507,9 +716,22 @@ class ExportPlatformGifTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            with self.assertRaisesRegex(ValueError, "technical=None"):
+            with self.assertRaisesRegex(ValueError, "technical_validation"):
                 export_platform_gif.load_validated_package(
                     package, allow_unvalidated=False
+                )
+
+    def test_nested_pass_without_successful_checks_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            package, _ = self.make_validated_package(Path(temporary))
+            report_path = package / "validation" / "report.json"
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            report["technical_validation"] = {"status": "pass", "checks": {}}
+            report_path.write_text(json.dumps(report), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "checks must be a non-empty object"):
+                export_platform_gif.load_validated_package(
+                    package,
+                    allow_unvalidated=False,
                 )
 
     def test_render_track_requires_its_own_validation(self) -> None:
@@ -519,7 +741,7 @@ class ExportPlatformGifTests(unittest.TestCase):
             source_report = json.loads(source_report_path.read_text(encoding="utf-8"))
             source_report.pop("technical_validation")
             source_report_path.write_text(json.dumps(source_report), encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "technical=None"):
+            with self.assertRaisesRegex(ValueError, "technical_validation"):
                 export_platform_gif.load_validated_package(
                     package, allow_unvalidated=False, frame_track="render"
                 )
@@ -666,6 +888,16 @@ class ExportPlatformGifTests(unittest.TestCase):
         }
         self.assertTrue(alpha_values.issubset({0, 255}))
 
+    def test_nearest_resampling_uses_integer_scale_and_transparent_padding(self) -> None:
+        frame = Image.new("RGBA", (4, 4), (0, 0, 0, 0))
+        for y in (1, 2):
+            for x in (1, 2):
+                frame.putpixel((x, y), (255, 0, 0, 255))
+        fitted = export_platform_gif.fit_frame(frame, (11, 11), "nearest")
+        self.assertEqual(fitted.getchannel("A").getbbox(), (3, 3, 7, 7))
+        top_row = fitted.getchannel("A").crop((0, 0, 11, 1))
+        self.assertEqual(top_row.getextrema(), (0, 0))
+
     def test_platform_provenance_parsers_reject_invalid_values(self) -> None:
         self.assertEqual(
             export_platform_gif.parse_spec_url("https://example.com/spec"),
@@ -792,7 +1024,7 @@ class ExportPlatformGifTests(unittest.TestCase):
             )
             self.assertEqual(
                 report["source_validation_report"]["sha256"],
-                export_platform_gif.sha256(package / "validation" / "report.json"),
+                artifact_integrity.sha256_path(package / "validation" / "report.json"),
             )
             record_visual_validation.update_report(
                 argparse.Namespace(
@@ -839,84 +1071,17 @@ class ExportPlatformGifTests(unittest.TestCase):
                 path,
                 save_all=True,
                 append_images=frames[1:],
-                duration=[100, 100],
+                duration=[123, 456],
                 loop=0,
                 lossless=True,
             )
             with Image.open(path) as image:
                 self.assertEqual(image.format, "WEBP")
                 self.assertEqual(image.n_frames, 2)
-
-
-class RecordVisualValidationTests(unittest.TestCase):
-    def make_report(self, root: Path, source_validation_complete: bool = True) -> Path:
-        artifact = root / "sticker.gif"
-        artifact.write_bytes(b"gif")
-        report_path = root / "sticker.export-report.json"
-        fingerprint = artifact_integrity.fingerprint_files(
-            [("artifact:sticker.gif", artifact)]
-        )
-        report_path.write_text(
-            json.dumps(
-                {
-                    "status": "pending_visual_validation",
-                    "source_validation_complete": source_validation_complete,
-                    "deliverable_ready": False,
-                    "artifact_scope": "export_files",
-                    "artifact_fingerprint": fingerprint,
-                    "validation_artifacts": [{"path": "sticker.gif"}],
-                    "technical_validation": {"status": "pass"},
-                    "visual_validation": {"status": "pending"},
-                }
-            ),
-            encoding="utf-8",
-        )
-        return report_path
-
-    def validation_args(self, report: Path, **overrides):
-        values = {
-            "report": report,
-            "status": "pass",
-            "identity": "stable",
-            "meaning": "clear",
-            "loop": "clean",
-            "alpha": "clean",
-            "small_size": "readable",
-        }
-        values.update(overrides)
-        return argparse.Namespace(**values)
-
-    def test_validation_pass_is_bound_to_unchanged_export_files(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            report_path = self.make_report(Path(temporary))
-            record_visual_validation.update_report(self.validation_args(report_path))
-            report = json.loads(report_path.read_text(encoding="utf-8"))
-            self.assertEqual(report["status"], "pass")
-            self.assertTrue(report["deliverable_ready"])
-
-    def test_validation_rejects_changed_export_files(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            report_path = self.make_report(root)
-            (root / "sticker.gif").write_bytes(b"changed")
-            with self.assertRaisesRegex(ValueError, "artifacts changed"):
-                record_visual_validation.update_report(
-                    self.validation_args(report_path)
-                )
-
-    def test_empty_notes_and_unvalidated_source_are_rejected(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            report_path = self.make_report(root)
-            with self.assertRaisesRegex(ValueError, "notes must be non-empty"):
-                record_visual_validation.update_report(
-                    self.validation_args(report_path, alpha="   ")
-                )
-            diagnostic = self.make_report(root, source_validation_complete=False)
-            with self.assertRaisesRegex(ValueError, "cannot become deliverable"):
-                record_visual_validation.update_report(
-                    self.validation_args(diagnostic)
-                )
+            self.assertEqual(
+                package_sticker.webp_animation_durations(path),
+                [123, 456],
+            )
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ Write `motion.json` before packaging. Use this minimum shape:
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "id": "short-sticker-id",
   "prompt": "Original natural-language request",
   "reference_image": "path/to/reference.png",
@@ -22,16 +22,32 @@ Write `motion.json` before packaging. Use this minimum shape:
     "deterministic": ["text", "translation", "opacity", "timing"]
   },
   "transparency": {
-    "strategy": "existing-alpha or chroma-key",
-    "work_color": "#RRGGBB or null"
+    "strategy": "existing-alpha",
+    "work_color": null
   },
   "frames": [
     {
       "file": "frames/000.png",
-      "duration_ms": 140,
-      "description": "What changes and why this frame exists"
+      "duration_ms": 200,
+      "description": "Neutral anticipation"
+    },
+    {
+      "file": "frames/001.png",
+      "duration_ms": 200,
+      "description": "Primary action"
+    },
+    {
+      "file": "frames/002.png",
+      "duration_ms": 600,
+      "description": "Clearest semantic hold"
+    },
+    {
+      "file": "frames/003.png",
+      "duration_ms": 200,
+      "description": "Recovery into the loop"
     }
-  ]
+  ],
+  "semantic_hold_frame": "frames/002.png"
 }
 ```
 
@@ -39,19 +55,23 @@ When deterministic interpolation or compositing adds visible value, add this opt
 
 ```json
 "render": {
-  "frame_dir": "working-render-frames",
-  "target_fps": 30,
-  "frame_count": 48,
-  "frame_durations_ms": [30, 40, 30],
-  "total_duration_ms": 1600
+  "target_fps": 5,
+  "frames": [
+    {"file": "working-render-frames/000.png", "duration_ms": 200},
+    {"file": "working-render-frames/001.png", "duration_ms": 200},
+    {"file": "working-render-frames/002.png", "duration_ms": 200},
+    {"file": "working-render-frames/003.png", "duration_ms": 200},
+    {"file": "working-render-frames/004.png", "duration_ms": 200},
+    {"file": "working-render-frames/005.png", "duration_ms": 200}
+  ]
 }
 ```
 
-`target_fps` is the user-facing numeric render target. The duration array must contain one positive integer per rendered PNG and sum to `total_duration_ms`. The working `frame_dir` is resolved relative to the motion-plan file and may not escape that directory. Packaging validates and normalizes it to `source/rendered-frames/`; there is no separate public rendered-frames directory argument. The shortened array above only illustrates timing variation; a real 48-frame track must contain 48 duration values. A render track is optional derived evidence, not a replacement for the 4–8 authored semantic keyframes.
+`target_fps` is the user-facing numeric render target. `frames` is the authoritative temporal order; each entry binds one motion-relative PNG path to its duration. Packaging follows that array instead of inferring order from filenames, then normalizes the files to `source/rendered-frames/0000.png` and so on. Frame count and total duration are derived rather than duplicated in the motion plan. The render track must have the same total duration as the authored keyframes, and its declared frame density must agree with `target_fps` within one frame. A render track may contain at most 240 frames and 64M aggregate input pixels. It is optional derived evidence, not a replacement for the 4–8 authored semantic keyframes.
 
 Planning rules:
 
-- Use `schema_version: 1`. Keep `loop` boolean, `canvas` as two positive integers, every frame path relative, and every `duration_ms` a positive integer; packaging rejects ambiguous coercions such as `"loop": "false"`.
+- Use `schema_version: 2`; older schema versions are rejected. Include the complete minimum shape above: identity, generation, transparency, and per-frame descriptions are required workflow evidence, not optional annotations. Keep `loop` boolean, `canvas` as two positive integers, every frame path relative, and every `duration_ms` a positive integer; packaging rejects ambiguous coercions such as `"loop": "false"`.
 - Commit to one primary semantic beat. Treat secondary effects as support.
 - Use 4–8 unique frames by default; do not duplicate identical frames to simulate a hold. Increase `duration_ms` instead.
 - Reserve 400–700 ms for the frame that communicates the meaning most clearly.

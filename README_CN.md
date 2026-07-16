@@ -89,6 +89,8 @@ output/<name>/
 
 只有 `technical_validation` 与 `visual_validation` 都通过，并且报告中 `deliverable_ready: true` 时，产物才可以交付。
 
+动作计划使用严格的 `schema_version: 2` 契约。可选渲染轨通过显式有序帧数组记录时序，不依赖目录文件名排序；旧版动作 schema 会被直接拒绝。
+
 ## 确定性工具
 
 Skill 会基于自身 `SKILL.md` 所在目录解析以下脚本：

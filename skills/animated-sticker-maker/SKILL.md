@@ -106,13 +106,13 @@ Pass `--expected-size <WIDTHxHEIGHT>` when the internally derived source canvas 
 
 Complete this step only when `sticker.webp`, copied source frames, `motion.json`, `reference.json`, the contact sheet, and the technical report all exist and technical validation passes.
 
-Packaging validates the core motion schema, rewrites copied keyframes as real PNG files at canonical `frames/000.png`, `frames/001.png`, and so on, and rewrites matching semantic-hold references with them. Treat the packaged `source/motion.json` as the self-contained source of truth; do not retain paths that only resolve in the working directory.
+Packaging requires the complete motion schema v2 workflow evidence, rewrites copied keyframes as real PNG files at canonical `frames/000.png`, `frames/001.png`, and so on, and rewrites matching semantic-hold references with them. Treat the packaged `source/motion.json` as the self-contained source of truth; do not retain paths that only resolve in the working directory.
 
 The packager re-opens `sticker.webp` to verify its format, canvas, frame count, loop setting, and transparency. Native pixel-art packages use lossless WebP encoding. The generated report binds the normalized motion, reference metadata, source frames, and encoded WebP with an artifact fingerprint; any later change invalidates the recorded visual validation.
 
 Packaging is transactional. It builds and validates a candidate in a sibling staging directory, replaces the existing usable package only after technical validation succeeds, and writes the latest technically failed candidate to `<output>.failed/`. A successful replacement removes that failed candidate. A declared `semantic_hold_frame` must name exactly one authored keyframe.
 
-When `motion.render` is present, the packager reads its relative working `frame_dir`, validates its numeric `target_fps`, frame count, durations, canvas, Alpha, and visibility, then normalizes the track into `source/rendered-frames/` with its own `validation/render-report.json`. `rendered-frames/` is an internal artifact directory, not a public CLI parameter.
+When `motion.render` is present, the packager follows its explicit ordered `frames` entries, validates its numeric `target_fps`, timing density, resource limits, canvas, Alpha, and visibility, then normalizes the track into `source/rendered-frames/` with its own `validation/render-report.json`. The track may contain at most 240 frames and 64M aggregate input pixels. `rendered-frames/` is an internal artifact directory, not a public CLI parameter.
 
 Every successful repack creates new validation reports with visual validation pending. Re-run visual validation after every repack; never preserve a prior pass across changed artifacts.
 

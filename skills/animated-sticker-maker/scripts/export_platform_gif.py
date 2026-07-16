@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import bisect
-import hashlib
 import json
 import re
 import tempfile
@@ -20,7 +19,11 @@ from artifact_integrity import (
     fingerprint_files,
     package_fingerprint,
     render_track_fingerprint,
+    safe_relative_file,
+    sha256_path,
 )
+from motion_schema import is_positive_int, validate_motion
+from validation_integrity import validate_report_state, validation_status
 
 
 COLOR_CANDIDATES = (255, 224, 192, 160, 128, 96, 64, 48, 32)
@@ -31,10 +34,6 @@ RESAMPLING_FILTERS = {
     "nearest": Image.Resampling.NEAREST,
 }
 PLATFORM_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
-
-
-def is_positive_int(value: object) -> bool:
-    return isinstance(value, int) and not isinstance(value, bool) and value > 0
 
 
 def parse_size(value: str) -> tuple[int, int]:
@@ -97,36 +96,6 @@ def parse_verified_on(value: str) -> str:
     if verified > date.today():
         raise argparse.ArgumentTypeError("verified-on cannot be in the future")
     return verified.isoformat()
-
-
-def sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def validation_status(report: dict[str, object]) -> dict[str, object]:
-    aggregate = report.get("status")
-    technical_validation = report.get("technical_validation")
-    visual_validation = report.get("visual_validation")
-    technical = (
-        technical_validation.get("status")
-        if isinstance(technical_validation, dict)
-        else None
-    )
-    visual = (
-        visual_validation.get("status")
-        if isinstance(visual_validation, dict)
-        else None
-    )
-    return {
-        "aggregate": aggregate if isinstance(aggregate, str) else None,
-        "technical": technical if isinstance(technical, str) else None,
-        "visual": visual if isinstance(visual, str) else None,
-        "deliverable_ready": report.get("deliverable_ready") is True,
-    }
 
 
 def validation_is_complete(validation: dict[str, object]) -> bool:
@@ -200,20 +169,6 @@ def commit_staged_files(
         raise
 
 
-def safe_track_dir(source_dir: Path, value: object) -> Path:
-    if not isinstance(value, str) or not value:
-        raise ValueError("render.frame_dir must be a non-empty relative path")
-    relative = Path(value)
-    if relative.is_absolute() or ".." in relative.parts:
-        raise ValueError("render.frame_dir must stay beneath the package source directory")
-    track_dir = source_dir / relative
-    if not track_dir.is_dir():
-        raise FileNotFoundError(f"render frame directory not found: {track_dir}")
-    if not track_dir.resolve().is_relative_to(source_dir.resolve()):
-        raise ValueError("render.frame_dir must not escape through a symbolic link")
-    return track_dir
-
-
 def load_validated_package(
     package: Path,
     allow_unvalidated: bool,
@@ -235,10 +190,12 @@ def load_validated_package(
             "validation/report.json"
         )
 
-    motion = json.loads(motion_path.read_text(encoding="utf-8"))
-    entries = motion.get("frames")
-    if not isinstance(entries, list) or not entries:
-        raise ValueError("source/motion.json must contain a non-empty frames array")
+    motion = validate_motion(
+        json.loads(motion_path.read_text(encoding="utf-8")),
+        packaged=True,
+    )
+    entries = motion["frames"]
+    assert isinstance(entries, list)
     durations = [entry.get("duration_ms") for entry in entries if isinstance(entry, dict)]
     if len(durations) != len(entries) or not all(
         is_positive_int(value) for value in durations
@@ -258,8 +215,8 @@ def load_validated_package(
         raise ValueError(
             "package source changed after validation; repack and repeat validation"
         )
-    source_validation = validation_status(report)
-    validation_complete = validation_is_complete(source_validation)
+    source_validation = validate_report_state(report)
+    validation_complete = source_validation["deliverable_ready"] is True
     if not validation_complete and not allow_unvalidated:
         raise ValueError(
             "package validation is incomplete "
@@ -271,38 +228,29 @@ def load_validated_package(
 
     derived_validation = None
     if frame_track == "keyframes":
-        frame_paths = sorted(frames_dir.glob("*.png"))
-        if len(frame_paths) != len(entries):
-            raise ValueError(
-                f"source frame count {len(frame_paths)} does not match motion frame count {len(entries)}"
+        frame_paths = [
+            safe_relative_file(
+                package / "source",
+                entry.get("file") if isinstance(entry, dict) else None,
+                f"frames[{index}].file",
             )
+            for index, entry in enumerate(entries)
+        ]
     elif frame_track == "render":
         render = motion.get("render")
         if not isinstance(render, dict):
             raise ValueError("source/motion.json has no render track metadata")
-        frame_paths = sorted(
-            safe_track_dir(package / "source", render.get("frame_dir")).glob("*.png")
-        )
-        render_durations = render.get("frame_durations_ms")
-        if not isinstance(render_durations, list) or not all(
-            is_positive_int(value) for value in render_durations
-        ):
-            raise ValueError("render.frame_durations_ms must contain positive integers")
-        durations = render_durations
-        declared_count = render.get("frame_count")
-        if (
-            not is_positive_int(declared_count)
-            or declared_count != len(frame_paths)
-            or len(durations) != len(frame_paths)
-        ):
-            raise ValueError(
-                "render frame count, frame_durations_ms, and files must have equal length"
+        render_entries = render["frames"]
+        assert isinstance(render_entries, list)
+        frame_paths = [
+            safe_relative_file(
+                package / "source",
+                entry.get("file") if isinstance(entry, dict) else None,
+                f"render.frames[{index}].file",
             )
-        declared_total = render.get("total_duration_ms")
-        if not is_positive_int(declared_total):
-            raise ValueError("render.total_duration_ms must be a positive integer")
-        if declared_total != sum(durations):
-            raise ValueError("render.total_duration_ms does not match frame durations")
+            for index, entry in enumerate(render_entries)
+        ]
+        durations = [int(entry["duration_ms"]) for entry in render_entries]
         if track_report is None:
             if not allow_unvalidated:
                 raise ValueError(
@@ -323,8 +271,8 @@ def load_validated_package(
                     "render track changed after validation; regenerate and repeat "
                     "its validation"
                 )
-            derived_validation = validation_status(derived_report)
-            derived_complete = validation_is_complete(derived_validation)
+            derived_validation = validate_report_state(derived_report)
+            derived_complete = derived_validation["deliverable_ready"] is True
             if not derived_complete and not allow_unvalidated:
                 raise ValueError(
                     "render track validation is incomplete "
@@ -349,6 +297,8 @@ def fit_frame(
     if resampling not in RESAMPLING_FILTERS:
         raise ValueError("resampling must be 'lanczos' or 'nearest'")
     scale = min(size[0] / frame.width, size[1] / frame.height)
+    if resampling == "nearest" and scale >= 1:
+        scale = max(1, int(scale))
     fitted_size = (
         max(1, round(frame.width * scale)),
         max(1, round(frame.height * scale)),
@@ -877,7 +827,7 @@ def main() -> None:
                 "mode": mode,
                 "colors": preview_colors,
                 "bytes": preview_bytes,
-                "sha256": sha256(staged_preview),
+                "sha256": sha256_path(staged_preview),
             }
 
         report_status, source_validation_complete = export_validation_status(
@@ -895,7 +845,7 @@ def main() -> None:
             ]
         )
         validation_artifacts = [
-            {"path": name, "sha256": sha256(path)}
+            {"path": name, "sha256": sha256_path(path)}
             for name, path in validation_artifact_entries
         ]
         report = {
@@ -918,11 +868,10 @@ def main() -> None:
             "verified_on": args.verified_on,
             "spec_url": args.spec_url,
             "source_package": "../..",
-            "source_validation_status": source_validation["aggregate"],
             "source_validation": source_validation,
             "source_validation_report": {
                 "path": "../../validation/report.json",
-                "sha256": sha256(source_report_path),
+                "sha256": sha256_path(source_report_path),
                 "artifact_fingerprint": source_artifact_fingerprint,
             },
             "frame_track": args.frame_track,
@@ -930,7 +879,7 @@ def main() -> None:
             "track_report": (
                 {
                     "path": str(args.track_report.resolve().relative_to(package)),
-                    "sha256": sha256(args.track_report),
+                    "sha256": sha256_path(args.track_report),
                 }
                 if args.track_report is not None
                 else None
@@ -950,7 +899,7 @@ def main() -> None:
                 "min_colors": args.min_colors,
                 "attempts": export_attempts,
                 "alpha_threshold": args.alpha_threshold,
-                "sha256": sha256(staged_output),
+                "sha256": sha256_path(staged_output),
                 "validation": validation,
             },
             "preview": preview_record,

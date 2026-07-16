@@ -7,6 +7,8 @@ import hashlib
 import json
 from pathlib import Path
 
+from motion_schema import validate_motion
+
 
 def sha256_path(path: Path) -> str:
     digest = hashlib.sha256()
@@ -45,7 +47,10 @@ def package_fingerprint(package: Path) -> str:
     motion_path = source / "motion.json"
     if not motion_path.is_file():
         raise FileNotFoundError(f"packaged motion not found: {motion_path}")
-    motion = json.loads(motion_path.read_text(encoding="utf-8"))
+    motion = validate_motion(
+        json.loads(motion_path.read_text(encoding="utf-8")),
+        packaged=True,
+    )
     frames = motion.get("frames")
     if not isinstance(frames, list) or not frames:
         raise ValueError("packaged motion must contain a non-empty frames array")
@@ -85,29 +90,31 @@ def package_fingerprint(package: Path) -> str:
 def render_track_fingerprint(package: Path) -> str:
     source = package / "source"
     motion_path = source / "motion.json"
-    motion = json.loads(motion_path.read_text(encoding="utf-8"))
+    motion = validate_motion(
+        json.loads(motion_path.read_text(encoding="utf-8")),
+        packaged=True,
+    )
     render = motion.get("render")
     if not isinstance(render, dict):
         raise ValueError("packaged motion has no render track metadata")
-    frame_dir_value = render.get("frame_dir")
-    if not isinstance(frame_dir_value, str) or not frame_dir_value:
-        raise ValueError("render.frame_dir must be a non-empty relative path")
-    relative = Path(frame_dir_value)
-    if relative.is_absolute() or ".." in relative.parts:
-        raise ValueError("render.frame_dir must stay beneath package source")
-    frame_dir = source / relative
-    if not frame_dir.is_dir() or not frame_dir.resolve().is_relative_to(source.resolve()):
-        raise ValueError("render.frame_dir is missing or escapes package source")
-    frame_paths = sorted(frame_dir.glob("*.png"))
-    if not frame_paths:
-        raise ValueError("render track contains no PNG frames")
+    frames = render.get("frames")
+    if not isinstance(frames, list) or not frames:
+        raise ValueError("render.frames must be a non-empty ordered array")
     metadata = json.dumps(render, sort_keys=True, separators=(",", ":")).encode("utf-8")
     digest = hashlib.sha256()
     digest.update(b"render-metadata\0")
     digest.update(metadata)
     digest.update(b"\0")
-    for path in frame_paths:
-        digest.update(f"render-frame:{path.name}".encode("utf-8"))
+    for index, frame in enumerate(frames):
+        if not isinstance(frame, dict):
+            raise ValueError(f"render.frames[{index}] must be an object")
+        path_value = frame.get("file")
+        path = safe_relative_file(
+            source,
+            path_value,
+            f"render.frames[{index}].file",
+        )
+        digest.update(f"render-frame:{path_value}".encode("utf-8"))
         digest.update(b"\0")
         digest.update(path.read_bytes())
         digest.update(b"\0")

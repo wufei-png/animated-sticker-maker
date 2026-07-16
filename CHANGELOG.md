@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here.
 
+## [Unreleased]
+
+- Require the complete motion schema v2 contract and reject older schema versions.
+- Make ordered render-frame entries authoritative and remove redundant render counts and duration arrays.
+- Validate render timing density, resource limits, encoded WebP durations, and integer pixel-art scaling.
+- Centralize validation-report evidence checks and bind export validation to unchanged upstream reports.
+- Remove unused cover artwork and consolidate repeated integrity helpers.
+
 ## [0.8.1] - 2026-07-16
 
 - Keep development-only tests outside the installable Skill so `npx skills add` and ClawHub distribute only runtime files.

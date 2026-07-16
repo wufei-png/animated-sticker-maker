@@ -7,24 +7,21 @@ import argparse
 import json
 from pathlib import Path
 
-from artifact_integrity import report_artifact_fingerprint
-
-
-NOTE_FIELDS = ("identity", "meaning", "loop", "alpha", "small_size")
+from validation_integrity import (
+    NOTE_FIELDS,
+    validate_report_binding,
+    validate_report_state,
+)
 
 
 def update_report(args: argparse.Namespace) -> None:
     report = json.loads(args.report.read_text(encoding="utf-8"))
-    expected_fingerprint = report.get("artifact_fingerprint")
-    if not isinstance(expected_fingerprint, str):
-        raise ValueError("report has no artifact fingerprint to bind this validation")
-    actual_fingerprint = report_artifact_fingerprint(args.report, report)
-    if actual_fingerprint != expected_fingerprint:
-        raise ValueError(
-            "validation artifacts changed; regenerate the report before validation"
-        )
+    if not isinstance(report, dict):
+        raise ValueError("validation report must contain a JSON object")
+    state = validate_report_state(report)
+    validate_report_binding(args.report, report)
 
-    technical_status = report.get("technical_validation", {}).get("status")
+    technical_status = state["technical"]
     if args.status == "pass" and technical_status != "pass":
         raise ValueError(
             "cannot pass visual validation before technical validation passes"
@@ -48,6 +45,7 @@ def update_report(args: argparse.Namespace) -> None:
     else:
         report["status"] = "visual_validation_failed"
     report["deliverable_ready"] = report["status"] == "pass"
+    validate_report_state(report)
 
     args.report.write_text(
         json.dumps(report, ensure_ascii=False, indent=2) + "\n",
