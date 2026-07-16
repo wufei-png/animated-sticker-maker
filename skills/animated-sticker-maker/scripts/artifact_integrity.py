@@ -128,19 +128,24 @@ def report_artifact_fingerprint(report_path: Path, report: dict[str, object]) ->
     if scope == "render_track":
         return render_track_fingerprint(report_path.parent.parent)
     if scope == "export_files":
-        artifacts = report.get("validation_artifacts")
-        if not isinstance(artifacts, list) or not artifacts:
-            raise ValueError("export validation report must list validation_artifacts")
+        gif = report.get("gif")
+        if not isinstance(gif, dict):
+            raise ValueError("export validation report must declare gif")
         entries: list[tuple[str, Path]] = []
-        for index, artifact in enumerate(artifacts):
-            if not isinstance(artifact, dict):
-                raise ValueError(f"validation_artifacts[{index}] must be an object")
+        for label, record in (("gif", gif), ("preview", report.get("preview"))):
+            if record is None:
+                continue
+            if not isinstance(record, dict):
+                raise ValueError(f"export validation report {label} must be an object")
+            path_value = record.get("path")
             path = safe_relative_file(
                 report_path.parent,
-                artifact.get("path"),
-                f"validation_artifacts[{index}].path",
+                path_value,
+                f"{label}.path",
             )
-            entries.append((f"artifact:{artifact['path']}", path))
+            entries.append((f"artifact:{path_value}", path))
+        if len({path for _, path in entries}) != len(entries):
+            raise ValueError("export GIF and preview paths must be distinct")
         return fingerprint_files(entries)
     raise ValueError(
         "report artifact_scope must be 'package_source', 'render_track', or 'export_files'"

@@ -200,25 +200,12 @@ def _validated_export_set(
         ):
             raise ValueError("preview.path must name one PNG file")
 
-    expected_artifacts = [gif_path]
+    artifact_records = [("gif", gif, gif_path)]
     if preview_path is not None:
-        expected_artifacts.append(preview_path)
-    if len(set(expected_artifacts)) != len(expected_artifacts):
+        assert isinstance(preview, dict)
+        artifact_records.append(("preview", preview, preview_path))
+    if len({path for _, _, path in artifact_records}) != len(artifact_records):
         raise ValueError("GIF and preview paths must be distinct")
-
-    artifacts = report.get("validation_artifacts")
-    artifact_paths = (
-        [
-            artifact.get("path") if isinstance(artifact, dict) else None
-            for artifact in artifacts
-        ]
-        if isinstance(artifacts, list)
-        else None
-    )
-    if artifact_paths != expected_artifacts:
-        raise ValueError(
-            "validation_artifacts must exactly match gif.path and preview.path"
-        )
 
     expected_fingerprint = report.get("artifact_fingerprint")
     if (
@@ -231,12 +218,8 @@ def _validated_export_set(
         )
 
     paths = {report_path}
-    artifact_records = {
-        str(artifact["path"]): artifact
-        for artifact in artifacts
-        if isinstance(artifact, dict)
-    }
-    for path_value in expected_artifacts:
+    for label, record, path_value in artifact_records:
+        assert isinstance(record, dict)
         relative = Path(path_value)
         candidate = export_dir / relative
         if (
@@ -253,27 +236,11 @@ def _validated_export_set(
                 f"export artifact must be a file: {candidate}"
             )
         actual_sha256 = sha256_path(candidate)
-        if artifact_records[path_value].get("sha256") != actual_sha256:
+        if record.get("sha256") != actual_sha256:
             raise ValueError(
-                f"validation artifact SHA-256 does not match {path_value}"
+                f"{label}.sha256 does not match {path_value}"
             )
+        if record.get("bytes") != candidate.stat().st_size:
+            raise ValueError(f"{label}.bytes does not match {path_value}")
         paths.add(candidate)
-
-    gif_record = report["gif"]
-    assert isinstance(gif_record, dict)
-    gif_file = export_dir / gif_path
-    if (
-        gif_record.get("sha256") != sha256_path(gif_file)
-        or gif_record.get("bytes") != gif_file.stat().st_size
-    ):
-        raise ValueError("gif metadata does not match its file")
-    if preview_path is not None:
-        preview_record = report["preview"]
-        assert isinstance(preview_record, dict)
-        preview_file = export_dir / preview_path
-        if (
-            preview_record.get("sha256") != sha256_path(preview_file)
-            or preview_record.get("bytes") != preview_file.stat().st_size
-        ):
-            raise ValueError("preview metadata does not match its file")
     return paths

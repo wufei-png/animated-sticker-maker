@@ -46,7 +46,6 @@ SCOPE_REPORT_FIELDS = {
     },
     "export_files": {
         "source_validation_complete",
-        "validation_artifacts",
         "platform",
         "verified_on",
         "spec_url",
@@ -388,23 +387,6 @@ def _validate_export_records(report: dict[str, object]) -> None:
         if not isinstance(track_record.get("path"), str) or not track_record["path"]:
             raise ValueError("track_report.path must be non-empty")
         _validate_sha256(track_record.get("sha256"), "track_report.sha256")
-    artifacts = report.get("validation_artifacts")
-    if not isinstance(artifacts, list) or not artifacts:
-        raise ValueError("validation_artifacts must be a non-empty array")
-    for index, artifact in enumerate(artifacts):
-        artifact = _validate_exact_keys(
-            artifact,
-            {"path", "sha256"},
-            f"validation_artifacts[{index}]",
-        )
-        if not isinstance(artifact.get("path"), str) or not artifact["path"]:
-            raise ValueError(
-                f"validation_artifacts[{index}].path must be non-empty"
-            )
-        _validate_sha256(
-            artifact.get("sha256"),
-            f"validation_artifacts[{index}].sha256",
-        )
 
 
 def _validate_gif_record(
@@ -486,20 +468,12 @@ def _validate_gif_record(
     validation = _validate_exact_keys(
         gif.get("validation"),
         {
-            "checks",
             "encoded_frame_count",
             "durations_ms",
             "total_duration_ms",
         },
         "gif.validation",
     )
-    checks = _validate_exact_keys(
-        validation.get("checks"),
-        GIF_CHECK_FIELDS,
-        "gif.validation.checks",
-    )
-    if any(not isinstance(value, bool) for value in checks.values()):
-        raise ValueError("gif.validation.checks values must be boolean")
     encoded_frame_count = validation.get("encoded_frame_count")
     if not _is_positive_int(encoded_frame_count):
         raise ValueError(
@@ -627,6 +601,8 @@ def _validate_export_contract(report: dict[str, object]) -> None:
             "preview",
         )
         _validate_preview_record(preview, report)
+        if preview.get("path") == gif.get("path"):
+            raise ValueError("GIF and preview paths must be distinct")
 
 
 def validate_report_contract(report: dict[str, object]) -> None:

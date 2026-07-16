@@ -143,6 +143,14 @@ class RecordVisualValidationTests(unittest.TestCase):
             [600, 600],
             True,
         )
+        gif_encoding_evidence = {
+            field: gif_validation[field]
+            for field in (
+                "encoded_frame_count",
+                "durations_ms",
+                "total_duration_ms",
+            )
+        }
         report_path = export_dir / "sticker.export-report.json"
         fingerprint = artifact_integrity.fingerprint_files(
             [("artifact:sticker.gif", artifact)]
@@ -161,12 +169,6 @@ class RecordVisualValidationTests(unittest.TestCase):
                     "artifact_scope": "export_files",
                     "policy_overrides": [],
                     "artifact_fingerprint": fingerprint,
-                    "validation_artifacts": [
-                        {
-                            "path": "sticker.gif",
-                            "sha256": artifact_integrity.sha256_path(artifact),
-                        }
-                    ],
                     "gif": {
                         "path": "sticker.gif",
                         "bytes": artifact.stat().st_size,
@@ -183,7 +185,7 @@ class RecordVisualValidationTests(unittest.TestCase):
                         ],
                         "alpha_threshold": 96,
                         "sha256": artifact_integrity.sha256_path(artifact),
-                        "validation": gif_validation,
+                        "validation": gif_encoding_evidence,
                     },
                     "preview": None,
                     "technical_validation": {
@@ -271,24 +273,32 @@ class RecordVisualValidationTests(unittest.TestCase):
                     self.validation_args(report_path)
                 )
 
-    def test_validation_rejects_incorrect_declared_artifact_sha(self) -> None:
+    def test_validation_rejects_incorrect_declared_gif_sha(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             report_path = self.make_report(Path(temporary))
             report = json.loads(report_path.read_text(encoding="utf-8"))
-            report["validation_artifacts"][0]["sha256"] = "0" * 64
+            report["gif"]["sha256"] = "0" * 64
             report_path.write_text(json.dumps(report), encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "sha256 does not match"):
+            with self.assertRaisesRegex(ValueError, "gif.sha256 does not match"):
                 record_visual_validation.update_report(
                     self.validation_args(report_path)
                 )
 
-    def test_validation_requires_exact_export_artifact_coverage(self) -> None:
+    def test_validation_rejects_legacy_validation_artifacts_field(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             report_path = self.make_report(Path(temporary))
             report = json.loads(report_path.read_text(encoding="utf-8"))
-            report["gif"]["path"] = "unbound.gif"
+            report["validation_artifacts"] = [
+                {
+                    "path": report["gif"]["path"],
+                    "sha256": report["gif"]["sha256"],
+                }
+            ]
             report_path.write_text(json.dumps(report), encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "must exactly match"):
+            with self.assertRaisesRegex(
+                ValueError,
+                "unexpected validation_artifacts",
+            ):
                 record_visual_validation.update_report(
                     self.validation_args(report_path)
                 )
@@ -335,7 +345,6 @@ class RecordVisualValidationTests(unittest.TestCase):
             report["gif"]["bytes"] = gif.stat().st_size
             report["gif"]["attempts"][-1]["bytes"] = gif.stat().st_size
             report["gif"]["sha256"] = digest
-            report["validation_artifacts"][0]["sha256"] = digest
             report["artifact_fingerprint"] = (
                 artifact_integrity.report_artifact_fingerprint(
                     report_path,
@@ -369,9 +378,6 @@ class RecordVisualValidationTests(unittest.TestCase):
                 "max_bytes": None,
                 "sha256": preview_digest,
             }
-            report["validation_artifacts"].append(
-                {"path": preview.name, "sha256": preview_digest}
-            )
             report["artifact_fingerprint"] = (
                 artifact_integrity.report_artifact_fingerprint(
                     report_path,
@@ -394,10 +400,10 @@ class RecordVisualValidationTests(unittest.TestCase):
                 lambda report: report["gif"].__setitem__("colors", "32"),
                 "gif.colors must be a supported palette size",
             ),
-            "gif-validation-extra": (
+            "gif-validation-checks": (
                 lambda report: report["gif"]["validation"].__setitem__(
-                    "comment",
-                    "unbound",
+                    "checks",
+                    passing_export_checks(),
                 ),
                 "gif.validation must contain exactly",
             ),
@@ -480,18 +486,6 @@ class RecordVisualValidationTests(unittest.TestCase):
             ) as image:
                 image.save(preview, format="PNG")
             report = json.loads(report_path.read_text(encoding="utf-8"))
-            report["validation_artifacts"].append(
-                {
-                    "path": preview.name,
-                    "sha256": artifact_integrity.sha256_path(preview),
-                }
-            )
-            report["artifact_fingerprint"] = artifact_integrity.fingerprint_files(
-                [
-                    ("artifact:sticker.gif", report_path.parent / "sticker.gif"),
-                    ("artifact:preview.png", preview),
-                ]
-            )
             report["preview"] = {
                 "path": preview.name,
                 "frame": 1,
@@ -502,6 +496,12 @@ class RecordVisualValidationTests(unittest.TestCase):
                 "max_bytes": None,
                 "sha256": artifact_integrity.sha256_path(preview),
             }
+            report["artifact_fingerprint"] = (
+                artifact_integrity.report_artifact_fingerprint(
+                    report_path,
+                    report,
+                )
+            )
             report_path.write_text(json.dumps(report), encoding="utf-8")
 
             with self.assertRaisesRegex(ValueError, "preview.bytes does not match"):

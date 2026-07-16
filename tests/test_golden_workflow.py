@@ -17,8 +17,8 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 from artifact_integrity import (  # noqa: E402
-    fingerprint_files,
     package_fingerprint,
+    report_artifact_fingerprint,
     render_track_fingerprint,
     sha256_path,
 )
@@ -205,15 +205,17 @@ class GoldenWorkflowTests(unittest.TestCase):
         report_path: Path,
         report: dict[str, object],
     ) -> None:
-        artifacts = report["validation_artifacts"]
-        assert isinstance(artifacts, list)
-        fingerprint_entries: list[tuple[str, Path]] = []
-        for artifact in artifacts:
-            assert isinstance(artifact, dict)
-            path = report_path.parent / str(artifact["path"])
-            artifact["sha256"] = sha256_path(path)
-            fingerprint_entries.append((f"artifact:{artifact['path']}", path))
-        report["artifact_fingerprint"] = fingerprint_files(fingerprint_entries)
+        for field in ("gif", "preview"):
+            record = report.get(field)
+            if not isinstance(record, dict):
+                continue
+            path = report_path.parent / str(record["path"])
+            record["sha256"] = sha256_path(path)
+            record["bytes"] = path.stat().st_size
+        report["artifact_fingerprint"] = report_artifact_fingerprint(
+            report_path,
+            report,
+        )
 
     def validation_command(self, report: Path) -> list[object]:
         arguments: list[object] = [report, "--status", "pass"]

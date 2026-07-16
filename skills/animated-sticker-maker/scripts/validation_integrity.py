@@ -20,6 +20,7 @@ from artifact_integrity import (
 )
 from motion_schema import validate_motion
 from validation_evidence import (
+    gif_encoding_evidence,
     package_webp_alpha_guard_required,
     package_source_evidence,
     render_track_evidence,
@@ -582,68 +583,44 @@ def validate_report_binding(report_path: Path, report: dict[str, object]) -> Non
 
     if report.get("artifact_scope") != "export_files":
         return
-    artifacts = report.get("validation_artifacts")
-    if not isinstance(artifacts, list) or not artifacts:
-        raise ValueError("export report must list validation_artifacts")
-    artifact_paths: list[str] = []
-    artifact_files: dict[str, Path] = {}
-    artifact_digests: dict[str, str] = {}
-    for index, artifact in enumerate(artifacts):
-        if not isinstance(artifact, dict):
-            raise ValueError(f"validation_artifacts[{index}] must be an object")
-        path_value = artifact.get("path")
-        if not isinstance(path_value, str) or not path_value:
-            raise ValueError(f"validation_artifacts[{index}].path must be non-empty")
-        artifact_paths.append(path_value)
-        artifact_path = safe_relative_file(
-            report_path.parent,
-            path_value,
-            f"validation_artifacts[{index}].path",
-        )
-        actual_digest = sha256_path(artifact_path)
-        if artifact.get("sha256") != actual_digest:
-            raise ValueError(
-                f"validation_artifacts[{index}].sha256 does not match its file"
-            )
-        artifact_files[path_value] = artifact_path
-        artifact_digests[path_value] = actual_digest
-    if len(set(artifact_paths)) != len(artifact_paths):
-        raise ValueError("validation_artifacts paths must be unique")
     gif = report.get("gif")
     if not isinstance(gif, dict) or not isinstance(gif.get("path"), str):
         raise ValueError("export report must declare gif.path")
     if Path(str(gif["path"])).suffix.lower() != ".gif":
         raise ValueError("export report gif.path must end in .gif")
-    expected_artifact_paths = [str(gif["path"])]
+    gif_path = safe_relative_file(
+        report_path.parent,
+        gif["path"],
+        "gif.path",
+    )
+    if gif.get("sha256") != sha256_path(gif_path):
+        raise ValueError("export report gif.sha256 does not match its file")
+    gif_size = gif_path.stat().st_size
+    if gif.get("bytes") != gif_size:
+        raise ValueError("export report gif.bytes does not match its file")
+    gif_max_bytes = gif.get("max_bytes")
+    if isinstance(gif_max_bytes, int) and gif_size > gif_max_bytes:
+        raise ValueError("exported GIF exceeds gif.max_bytes")
+
     preview = report.get("preview")
+    preview_path = None
     if preview is not None:
         if not isinstance(preview, dict) or not isinstance(preview.get("path"), str):
             raise ValueError("export report preview must declare preview.path")
         if Path(str(preview["path"])).suffix.lower() != ".png":
             raise ValueError("export report preview.path must end in .png")
-        expected_artifact_paths.append(str(preview["path"]))
-    if artifact_paths != expected_artifact_paths:
-        raise ValueError(
-            "validation_artifacts must exactly match the GIF and optional preview"
+        if preview["path"] == gif["path"]:
+            raise ValueError("export GIF and preview paths must be distinct")
+        preview_path = safe_relative_file(
+            report_path.parent,
+            preview["path"],
+            "preview.path",
         )
-    gif_path_value = str(gif["path"])
-    gif_path = artifact_files[gif_path_value]
-    gif_size = gif_path.stat().st_size
-    if gif.get("bytes") != gif_size:
-        raise ValueError("export report gif.bytes does not match its file")
-    if gif.get("sha256") != artifact_digests[gif_path_value]:
-        raise ValueError("export report gif.sha256 does not match its file")
-    gif_max_bytes = gif.get("max_bytes")
-    if isinstance(gif_max_bytes, int) and gif_size > gif_max_bytes:
-        raise ValueError("exported GIF exceeds gif.max_bytes")
-    if isinstance(preview, dict):
-        preview_path_value = str(preview["path"])
-        preview_path = artifact_files[preview_path_value]
+        if preview.get("sha256") != sha256_path(preview_path):
+            raise ValueError("export report preview.sha256 does not match its file")
         preview_size = preview_path.stat().st_size
         if preview.get("bytes") != preview_size:
             raise ValueError("export report preview.bytes does not match its file")
-        if preview.get("sha256") != artifact_digests[preview_path_value]:
-            raise ValueError("export report preview.sha256 does not match its file")
         preview_max_bytes = preview.get("max_bytes")
         if (
             isinstance(preview_max_bytes, int)
@@ -662,7 +639,7 @@ def validate_report_binding(report_path: Path, report: dict[str, object]) -> Non
         report,
         motion,
     )
-    if gif_validation != actual_gif_validation:
+    if gif_validation != gif_encoding_evidence(actual_gif_validation):
         raise ValueError(
             "export report gif.validation does not match current GIF media"
         )
@@ -670,7 +647,7 @@ def validate_report_binding(report_path: Path, report: dict[str, object]) -> Non
         raise ValueError(
             "export technical_validation.checks do not match current GIF media"
         )
-    if isinstance(preview, dict):
+    if isinstance(preview, dict) and preview_path is not None:
         preview_frame = int(preview["frame"])
         preview_limit = (
             len(motion["frames"])
@@ -682,7 +659,7 @@ def validate_report_binding(report_path: Path, report: dict[str, object]) -> Non
                 "export report preview.frame is outside its declared source"
             )
         validate_preview_evidence(
-            artifact_files[str(preview["path"])],
+            preview_path,
             preview,
             (int(report["canvas"][0]), int(report["canvas"][1])),
         )

@@ -33,6 +33,7 @@ from gif_export_core import (
     write_preview,
 )
 from media_validation import validate_gif
+from validation_evidence import gif_encoding_evidence
 from validation_integrity import (
     REPORT_SCHEMA_VERSION,
     validate_report_state,
@@ -324,19 +325,15 @@ def main() -> None:
             track_validation,
             track_required=args.frame_track == "render",
         )
-        validation_artifact_entries = [(output.name, staged_output)]
+        artifact_entries = [(output.name, staged_output)]
         if staged_preview is not None and preview_output is not None:
-            validation_artifact_entries.append((preview_output.name, staged_preview))
+            artifact_entries.append((preview_output.name, staged_preview))
         artifact_fingerprint = fingerprint_files(
             [
                 (f"artifact:{name}", path)
-                for name, path in validation_artifact_entries
+                for name, path in artifact_entries
             ]
         )
-        validation_artifacts = [
-            {"path": name, "sha256": sha256_path(path)}
-            for name, path in validation_artifact_entries
-        ]
         report = {
             "schema_version": REPORT_SCHEMA_VERSION,
             "status": report_status,
@@ -345,7 +342,6 @@ def main() -> None:
             "artifact_scope": "export_files",
             "policy_overrides": [],
             "artifact_fingerprint": artifact_fingerprint,
-            "validation_artifacts": validation_artifacts,
             "technical_validation": {
                 "status": "pass",
                 "checks": validation["checks"],
@@ -391,7 +387,7 @@ def main() -> None:
                 "attempts": export_attempts,
                 "alpha_threshold": args.alpha_threshold,
                 "sha256": sha256_path(staged_output),
-                "validation": validation,
+                "validation": gif_encoding_evidence(validation),
             },
             "preview": preview_record,
         }

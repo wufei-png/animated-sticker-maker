@@ -19,6 +19,21 @@ from media_validation import (
 
 DEFAULT_FRAME_RANGE = (4, 8)
 DEFAULT_DURATION_RANGE_MS = (1200, 2000)
+GIF_ENCODING_EVIDENCE_FIELDS = (
+    "encoded_frame_count",
+    "durations_ms",
+    "total_duration_ms",
+)
+
+
+def gif_encoding_evidence(
+    validation: dict[str, object],
+) -> dict[str, object]:
+    """Keep encoded timeline facts separate from top-level technical checks."""
+    return {
+        field: validation[field]
+        for field in GIF_ENCODING_EVIDENCE_FIELDS
+    }
 
 
 def inspect_png_frames(

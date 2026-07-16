@@ -1405,10 +1405,6 @@ class ExportPlatformGifTests(unittest.TestCase):
                         },
                         "gif": {"path": gif.name},
                         "preview": None,
-                        "validation_artifacts": [
-                            {"path": gif.name},
-                            {"path": unrelated.name},
-                        ],
                     }
                 ),
                 encoding="utf-8",
@@ -1416,7 +1412,7 @@ class ExportPlatformGifTests(unittest.TestCase):
 
             with self.assertRaisesRegex(
                 ValueError,
-                "report fields are invalid|validation_artifacts must exactly match",
+                "report fields are invalid",
             ):
                 export_platform_gif.previous_export_artifacts(
                     gif,
@@ -1490,10 +1486,6 @@ class ExportPlatformGifTests(unittest.TestCase):
             report["preview"]["path"] = unrelated.name
             report["preview"]["sha256"] = unrelated_sha
             report["preview"]["bytes"] = unrelated.stat().st_size
-            report["validation_artifacts"][1] = {
-                "path": unrelated.name,
-                "sha256": unrelated_sha,
-            }
             report_path.write_text(json.dumps(report), encoding="utf-8")
 
             with self.assertRaisesRegex(ValueError, "artifact_fingerprint"):
@@ -1627,10 +1619,7 @@ class ExportPlatformGifTests(unittest.TestCase):
             )
             self.assertFalse(preview.exists())
             self.assertIsNone(report["preview"])
-            self.assertEqual(
-                [artifact["path"] for artifact in report["validation_artifacts"]],
-                ["sticker.gif"],
-            )
+            self.assertNotIn("validation_artifacts", report)
 
     def test_successful_export_replaces_set_when_report_name_changes(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -1799,6 +1788,12 @@ class ExportPlatformGifTests(unittest.TestCase):
             self.assertEqual(report["policy_overrides"], [])
             self.assertEqual(report["status"], "pending_visual_validation")
             self.assertFalse(report["deliverable_ready"])
+            self.assertNotIn("validation_artifacts", report)
+            self.assertNotIn("checks", report["gif"]["validation"])
+            self.assertEqual(
+                report["technical_validation"]["checks"],
+                passing_export_checks(),
+            )
             self.assertEqual(
                 report["source_validation_report"]["artifact_fingerprint"],
                 artifact_integrity.package_fingerprint(package),

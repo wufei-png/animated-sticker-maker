@@ -13,6 +13,7 @@ from doctor_package import diagnose_primary_package, diagnose_render_track
 from gif_export_core import gif_safe_durations
 from media_validation import alpha_metrics, validate_gif
 from motion_schema import validate_motion
+from validation_evidence import gif_encoding_evidence
 
 
 def add_dependency_diagnosis(
@@ -193,9 +194,23 @@ def diagnose_export_media(
         if actual_validation is not None:
             diagnosis.boolean(
                 "export.gif.validation-evidence",
-                gif.get("validation") == actual_validation,
+                gif.get("validation")
+                == gif_encoding_evidence(actual_validation),
                 "GIF validation evidence matches current media",
                 "GIF validation evidence does not match current media",
+                report_path,
+            )
+            technical = report.get("technical_validation")
+            technical_checks = (
+                technical.get("checks")
+                if isinstance(technical, dict)
+                else None
+            )
+            diagnosis.boolean(
+                "export.gif.technical-checks",
+                technical_checks == actual_validation.get("checks"),
+                "top-level technical checks match current GIF media",
+                "top-level technical checks do not match current GIF media",
                 report_path,
             )
     preview = report.get("preview")
