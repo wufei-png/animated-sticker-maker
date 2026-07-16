@@ -16,6 +16,26 @@ Animated Sticker Maker 把这段零散的制作过程整理成一个可安装的
 
 这个 Skill 会先判断哪些帧真的需要生成，再用确定性处理完成其余部分。动作计划会把这两类工作分开记录，后续返工时能看出某一帧是怎么来的。
 
+## 从哪些开源项目中学到什么
+
+Animated Sticker Maker 的设计有明确的开源参考。早期调研重点看了三条公开路线，其中最直接的架构参考是 OpenAI 的 [`hatch-pet`](https://github.com/openai/skills/tree/main/skills/.curated/hatch-pet)。MiniMax 和美图的方案则更像对照组：它们证明了“照片生成一套动态贴纸”可以做得很短，也帮助我们看清快速出图和可控逐帧生产之间的差别。
+
+| 项目 | 做得好的地方 | 对当前设计的影响 | 为什么没有直接采用 |
+| --- | --- | --- | --- |
+| OpenAI [`hatch-pet`](https://github.com/openai/skills/tree/main/skills/.curated/hatch-pet) | 用主参考图锁定角色，再按动作生成素材；精确切帧、透明处理、拼图和校验交给脚本；用 contact sheet 和动画预览发现漂移，失败时只重做有问题的动作。 | 保留身份锁、参考图约束、生成与确定性处理分工、接触表和视觉检查；新姿态只生成最少的锚点，已通过的素材尽量复用。 | 它服务 Codex Pet，动作状态、atlas 几何和 `pet.json` 都有固定协议，文字和独立表情语义也受 Pet 场景限制。普通聊天表情不需要背负这套输出契约。 |
+| MiniMax [`gif-sticker-maker`](https://github.com/MiniMax-AI/skills/tree/main/skills/gif-sticker-maker) | 输入简单，四张静态贴纸可以并发生成，再分别走 image-to-video 和 GIF 转换；默认动作和多语言字幕让第一次使用很快。 | 继续把公开输入压到“参考图 + 动作描述”，让 Skill 内部派生制作参数；交付文件保持明确，不要求用户理解底层媒体命令。 | 它固定四张、固定盲盒风格和默认动作，依赖 MiniMax 图片与视频 API，并以白底视频转 GIF 为主。Animated Sticker Maker 更关心透明源帧、精确时序和循环，不把视频压缩结果当作母版。 |
+| 美图 [`meitu-stickers`](https://github.com/meitu/meitu-skills/tree/main/skills/meitu-stickers) | 支持多种风格和自定义风格，先生成四宫格供用户确认，再拆成四张；需要时才逐张转视频和 GIF，并设计了清晰的失败降级路径。 | 把创意确认与确定性处理分开，保留每一阶段的文件；平台格式只在确实需要时派生，不提前把所有产物都做一遍。 | 它以四宫格套装和美图 OpenAPI 为中心，动画仍走 image-to-video。当前 Skill 选择一次只处理一张表情，把整包选题、顺序和品牌设定留在素材项目中。 |
+
+最终选择这条路线，主要看中返工时的可控性：
+
+- 一次调用只处理一个主体和一个主要语义，整包编排留给所属项目。
+- 动画以 4–8 张语义关键帧和逐帧时长为基础，不把视频帧率当作默认生产方式。
+- 核心契约不绑定某一家生成 API；host 负责参考图条件下的栅格生成或编辑，脚本负责可重复的后处理。
+- RGBA 源帧和透明 WebP 是平台无关母包，GIF 只是目标平台需要时生成的派生文件。
+- `technical_validation`、`visual_validation`、产物指纹和事务式打包共同回答“这版能不能交付”，而不只检查文件是否生成成功。
+
+如果目标就是制作 Codex Pet，直接使用 `hatch-pet` 更合适；如果想快速得到四张特定风格的 GIF，MiniMax 或美图的路径更短。Animated Sticker Maker 面向的是另一种需求：同一个角色要反复迭代多张表情，同时保留逐帧控制、透明母版和可复查的交付记录。
+
 ## 一次只做好一张
 
 每次调用处理一个主体、一张表情和一个主要语义。默认流程包括：
