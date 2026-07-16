@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="__HTML_LANG__">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: file:; img-src 'self' data: file:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>__DOCUMENT_TITLE__</title>
+  <style>
+__REVIEW_CSS__  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="masthead">
+      <div class="brand">
+        <span class="brand-mark">ASM / QA</span>
+        <span class="brand-name" id="brand-name"></span>
+      </div>
+      <span class="status-chip" id="status-chip"></span>
+    </header>
+
+    <section class="intro">
+      <div>
+        <p class="eyebrow" id="scope-label"></p>
+        <h1 id="hero-title"></h1>
+        <p class="intro-copy" id="scope-description"></p>
+      </div>
+      <dl class="report-identity">
+        <dt id="report-label"></dt>
+        <dd id="report-name"></dd>
+        <dt id="fingerprint-label"></dt>
+        <dd id="fingerprint"></dd>
+        <dt id="generated-label"></dt>
+        <dd id="generated-at"></dd>
+      </dl>
+    </section>
+
+    <section class="section" aria-labelledby="exposure-heading">
+      <div class="section-heading">
+        <h2 id="exposure-heading"></h2>
+        <p class="section-note" id="hero-subtitle"></p>
+      </div>
+      <div class="exposure-rail" id="exposure-rail"></div>
+      <div id="hero-mode-note"></div>
+      <div id="transport-root"></div>
+      <div id="inspection-root"></div>
+    </section>
+
+    <section class="section" aria-labelledby="evidence-heading">
+      <div class="section-heading">
+        <h2 id="evidence-heading"></h2>
+        <p class="section-note" id="evidence-note"></p>
+      </div>
+      <div class="evidence-grid" id="evidence-grid"></div>
+    </section>
+
+    <section class="section" aria-labelledby="frames-heading">
+      <div class="section-heading">
+        <h2 id="frames-heading"></h2>
+        <p class="section-note" id="frame-strip-note"></p>
+      </div>
+      <div class="frame-strip" id="frame-strip"></div>
+      <div class="auxiliary-wrap" id="auxiliary-wrap" hidden>
+        <h3 id="auxiliary-label"></h3>
+        <div class="frame-strip" id="auxiliary-strip"></div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="prompts-heading">
+      <div class="section-heading">
+        <h2 id="prompts-heading"></h2>
+        <p class="section-note" id="prompts-note"></p>
+      </div>
+      <div class="review-prompts" id="review-prompts"></div>
+    </section>
+
+    <section class="section" id="technical-section">
+      <details>
+        <summary id="technical-summary"></summary>
+        <div class="technical-content" id="technical-content"></div>
+      </details>
+    </section>
+
+    <footer class="footer">
+      <span id="footer-note"></span>
+      <span id="footer-path"></span>
+    </footer>
+  </main>
+
+  <script>
+__REVIEW_SCRIPT__  </script>
+</body>
+</html>

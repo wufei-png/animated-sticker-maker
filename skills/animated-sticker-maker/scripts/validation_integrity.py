@@ -9,6 +9,8 @@ from datetime import date
 from pathlib import Path
 from urllib.parse import urlparse
 
+from PIL import Image
+
 from artifact_integrity import (
     package_fingerprint,
     render_track_fingerprint,
@@ -17,9 +19,21 @@ from artifact_integrity import (
     sha256_path,
 )
 from motion_schema import validate_motion
+from validation_evidence import (
+    package_webp_alpha_guard_required,
+    package_source_evidence,
+    render_track_evidence,
+    validate_export_gif_evidence,
+    validate_preview_evidence,
+)
+from validation_schema import (
+    GIF_CHECK_FIELDS,
+    NOTE_FIELDS,
+    validate_report_contract,
+)
 
 
-NOTE_FIELDS = ("identity", "meaning", "loop", "alpha", "small_size")
+REPORT_SCHEMA_VERSION = 1
 PACKAGE_SOURCE_CHECK_IDS = {
     "frame_count_in_default_range",
     "source_frames_are_rgba",
@@ -47,15 +61,29 @@ RENDER_TRACK_CHECK_IDS = {
     "all_borders_transparent",
     "all_frames_have_visible_pixels",
 }
-EXPORT_GIF_CHECK_IDS = {
-    "gif_is_gif",
-    "size_matches",
-    "frame_count_matches",
-    "durations_preserved",
-    "loop_matches",
-    "all_borders_transparent",
-}
+EXPORT_GIF_CHECK_IDS = set(GIF_CHECK_FIELDS)
 PLATFORM_PATTERN = re.compile(r"[A-Za-z0-9._-]+")
+PACKAGE_POLICY_OVERRIDES = {
+    "frame_count_in_default_range": {
+        "source": "--allow-nonstandard-frame-count",
+        "actual_field": "frame_count",
+        "default_range": [4, 8],
+    },
+    "duration_in_default_range": {
+        "source": "--allow-nonstandard-timing",
+        "actual_field": "total_duration_ms",
+        "default_range": [1200, 2000],
+    },
+}
+
+
+def validate_report_schema(report: dict[str, object]) -> None:
+    schema_version = report.get("schema_version")
+    if type(schema_version) is not int or schema_version != REPORT_SCHEMA_VERSION:
+        raise ValueError(
+            f"report.schema_version must be {REPORT_SCHEMA_VERSION}; "
+            "regenerate the package or export with the current Skill"
+        )
 
 
 def validation_status(report: dict[str, object]) -> dict[str, object]:
@@ -67,6 +95,71 @@ def validation_status(report: dict[str, object]) -> dict[str, object]:
         "visual": visual.get("status") if isinstance(visual, dict) else None,
         "deliverable_ready": report.get("deliverable_ready") is True,
     }
+
+
+def _validated_policy_overrides(
+    report: dict[str, object],
+    checks: dict[str, bool],
+) -> set[str]:
+    overrides = report.get("policy_overrides")
+    if not isinstance(overrides, list):
+        raise ValueError("report.policy_overrides must be an array")
+    if report.get("artifact_scope") != "package_source" and overrides:
+        raise ValueError(
+            "only package_source reports may declare policy_overrides"
+        )
+
+    overridden_checks: set[str] = set()
+    for index, override in enumerate(overrides):
+        if not isinstance(override, dict):
+            raise ValueError(f"policy_overrides[{index}] must be an object")
+        if set(override) != {
+            "check_id",
+            "source",
+            "actual",
+            "default_range",
+        }:
+            raise ValueError(
+                f"policy_overrides[{index}] must contain check_id, source, "
+                "actual, and default_range"
+            )
+        check_id = override.get("check_id")
+        if check_id not in PACKAGE_POLICY_OVERRIDES:
+            raise ValueError(
+                f"policy_overrides[{index}].check_id is not overridable"
+            )
+        if check_id in overridden_checks:
+            raise ValueError("policy_overrides check_id values must be unique")
+        specification = PACKAGE_POLICY_OVERRIDES[str(check_id)]
+        if override.get("source") != specification["source"]:
+            raise ValueError(
+                f"policy_overrides[{index}].source must be "
+                f"{specification['source']!r}"
+            )
+        if override.get("default_range") != specification["default_range"]:
+            raise ValueError(
+                f"policy_overrides[{index}].default_range is inconsistent"
+            )
+        actual = report.get(str(specification["actual_field"]))
+        if override.get("actual") != actual:
+            raise ValueError(
+                f"policy_overrides[{index}].actual does not match report metadata"
+            )
+        default_min, default_max = specification["default_range"]
+        if (
+            not isinstance(actual, int)
+            or isinstance(actual, bool)
+            or default_min <= actual <= default_max
+        ):
+            raise ValueError(
+                f"policy_overrides[{index}] does not describe a real deviation"
+            )
+        if checks.get(str(check_id)) is not False:
+            raise ValueError(
+                f"policy_overrides[{index}] must bind a failed objective check"
+            )
+        overridden_checks.add(str(check_id))
+    return overridden_checks
 
 
 def _validated_technical_status(report: dict[str, object]) -> str:
@@ -81,7 +174,16 @@ def _validated_technical_status(report: dict[str, object]) -> str:
         raise ValueError("technical_validation.checks must be a non-empty object")
     if any(not isinstance(value, bool) for value in checks.values()):
         raise ValueError("every technical_validation check must be boolean")
-    expected = "pass" if all(checks.values()) else "fail"
+    typed_checks = {str(key): value for key, value in checks.items()}
+    overridden_checks = _validated_policy_overrides(report, typed_checks)
+    expected = (
+        "pass"
+        if all(
+            passed or check_id in overridden_checks
+            for check_id, passed in typed_checks.items()
+        )
+        else "fail"
+    )
     if status != expected:
         raise ValueError(
             f"technical_validation.status must be {expected!r} for its recorded checks"
@@ -116,6 +218,7 @@ def _validated_visual_status(report: dict[str, object]) -> str:
 def validate_report_state(
     report: dict[str, object], *, require_complete: bool = False
 ) -> dict[str, object]:
+    validate_report_schema(report)
     technical = _validated_technical_status(report)
     visual = _validated_visual_status(report)
     source_complete = report.get("source_validation_complete")
@@ -194,11 +297,186 @@ def _validate_technical_evidence(
                     "failed package technical_validation.checks do not match "
                     "the package evidence contract"
                 )
+        inspect_sticker = bool(
+            set(typed_checks) & (PACKAGE_WEBP_CHECK_IDS | {"sticker_is_readable"})
+        )
+        (
+            actual_checks,
+            actual_metrics,
+            _,
+            _,
+        ) = package_source_evidence(
+            package,
+            motion,
+            inspect_sticker=inspect_sticker,
+        )
+        # The package contains normalized RGBA PNGs, so the original input mode
+        # recorded during packaging cannot be reconstructed from the artifact.
+        actual_checks["source_frames_are_rgba"] = typed_checks[
+            "source_frames_are_rgba"
+        ]
+        if typed_checks != actual_checks:
+            raise ValueError(
+                "package technical_validation.checks do not match current media"
+            )
+        if report.get("frames") != actual_metrics:
+            raise ValueError(
+                "package report frames do not match current packaged frames"
+            )
+        frames = motion["frames"]
+        frame_count = len(frames)
+        total_duration_ms = sum(
+            int(frame["duration_ms"])
+            for frame in frames
+        )
+        for field, actual in (
+            ("frame_count", frame_count),
+            ("total_duration_ms", total_duration_ms),
+        ):
+            recorded = report.get(field)
+            if type(recorded) is not int or recorded != actual:
+                raise ValueError(
+                    f"package report {field} must match the packaged motion"
+                )
+        expected_metadata = {
+            "canvas": motion["canvas"],
+            "resampling": motion["resampling"],
+        }
+        for field, expected_value in expected_metadata.items():
+            if report.get(field) != expected_value:
+                raise ValueError(
+                    f"package report {field} must match the packaged motion"
+                )
+        reference = _load_json_object(
+            package / "source" / "reference.json",
+            "reference metadata",
+        )
+        if report.get("reference") != reference:
+            raise ValueError(
+                "package report reference must match source/reference.json"
+            )
+        motion_reference = motion.get("reference")
+        if not isinstance(motion_reference, dict) or any(
+            motion_reference.get(field) != reference.get(field)
+            for field in ("filename", "sha256", "included_path")
+        ):
+            raise ValueError(
+                "packaged motion reference must match source/reference.json"
+            )
+        included_path = reference.get("included_path")
+        if included_path is not None:
+            included = safe_relative_file(
+                package / "source",
+                included_path,
+                "reference.included_path",
+            )
+            if reference.get("sha256") != sha256_path(included):
+                raise ValueError(
+                    "reference.sha256 does not match the included reference"
+                )
+            if reference.get("bytes") != included.stat().st_size:
+                raise ValueError(
+                    "reference.bytes does not match the included reference"
+                )
+            with Image.open(included) as image:
+                image.load()
+                included_metadata = {
+                    "format": image.format,
+                    "mode": image.mode,
+                    "dimensions": list(image.size),
+                }
+            if any(
+                reference.get(field) != value
+                for field, value in included_metadata.items()
+            ):
+                raise ValueError(
+                    "reference media metadata does not match the included file"
+                )
+        overrides = report.get("policy_overrides")
+        overridden_checks = {
+            str(override["check_id"])
+            for override in overrides
+            if isinstance(override, dict)
+            and isinstance(override.get("check_id"), str)
+        }
+        pre_encoding_checks = {
+            key: value
+            for key, value in actual_checks.items()
+            if key not in PACKAGE_WEBP_CHECK_IDS
+            and key != "sticker_is_readable"
+        }
+        pre_encoding_pass = all(
+            passed or check_id in overridden_checks
+            for check_id, passed in pre_encoding_checks.items()
+        )
+        expected_encoding = {
+            "lossless": motion["resampling"] == "nearest",
+            "alpha_guard_applied": bool(
+                pre_encoding_pass
+                and package_webp_alpha_guard_required(package, motion)
+            ),
+        }
+        if report.get("webp_encoding") != expected_encoding:
+            raise ValueError(
+                "package report webp_encoding does not match current source media"
+            )
+        render = motion.get("render")
+        expected_render_summary = None
+        if isinstance(render, dict):
+            render_frames = render["frames"]
+            expected_render_summary = {
+                "target_fps": render["target_fps"],
+                "frame_count": len(render_frames),
+                "total_duration_ms": sum(
+                    int(frame["duration_ms"])
+                    for frame in render_frames
+                ),
+            }
+        if report.get("render_track") != expected_render_summary:
+            raise ValueError(
+                "package report render_track must match the packaged motion"
+            )
     elif scope == "render_track":
         if set(typed_checks) != RENDER_TRACK_CHECK_IDS:
             raise ValueError(
                 "render technical_validation.checks must exactly match "
                 "the render-track evidence contract"
+            )
+        package = report_path.parent.parent
+        motion = validate_motion(
+            _load_json_object(package / "source" / "motion.json", "packaged motion"),
+            packaged=True,
+        )
+        render = motion.get("render")
+        if not isinstance(render, dict):
+            raise ValueError("render report requires packaged render metadata")
+        render_frames = render["frames"]
+        actual_checks, actual_metrics = render_track_evidence(package, motion)
+        actual_checks["source_frames_are_rgba"] = typed_checks[
+            "source_frames_are_rgba"
+        ]
+        if typed_checks != actual_checks:
+            raise ValueError(
+                "render technical_validation.checks do not match current media"
+            )
+        if report.get("frames") != actual_metrics:
+            raise ValueError(
+                "render report frames do not match current render media"
+            )
+        expected_metadata = {
+            "target_fps": render["target_fps"],
+            "frame_count": len(render_frames),
+            "total_duration_ms": sum(
+                int(frame["duration_ms"])
+                for frame in render_frames
+            ),
+        }
+        if any(
+            report.get(field) != value
+            for field, value in expected_metadata.items()
+        ):
+            raise ValueError(
+                "render report metadata must match the packaged motion"
             )
     elif scope == "export_files":
         if set(typed_checks) != EXPORT_GIF_CHECK_IDS:
@@ -292,6 +570,9 @@ def _validate_export_metadata(
 
 
 def validate_report_binding(report_path: Path, report: dict[str, object]) -> None:
+    validate_report_schema(report)
+    _validated_technical_status(report)
+    validate_report_contract(report)
     technical_checks = _validate_technical_evidence(report_path, report)
     expected = report.get("artifact_fingerprint")
     if not isinstance(expected, str):
@@ -376,12 +657,34 @@ def validate_report_binding(report_path: Path, report: dict[str, object]) -> Non
     )
     _validate_export_metadata(report_path, report, motion)
     gif_validation = gif.get("validation")
-    if (
-        not isinstance(gif_validation, dict)
-        or gif_validation.get("checks") != technical_checks
-    ):
+    actual_gif_validation = validate_export_gif_evidence(
+        gif_path,
+        report,
+        motion,
+    )
+    if gif_validation != actual_gif_validation:
         raise ValueError(
-            "export technical_validation.checks must match gif.validation.checks"
+            "export report gif.validation does not match current GIF media"
+        )
+    if actual_gif_validation.get("checks") != technical_checks:
+        raise ValueError(
+            "export technical_validation.checks do not match current GIF media"
+        )
+    if isinstance(preview, dict):
+        preview_frame = int(preview["frame"])
+        preview_limit = (
+            len(motion["frames"])
+            if preview["frame_source"] == "authored"
+            else int(report["frame_count"])
+        )
+        if preview_frame > preview_limit:
+            raise ValueError(
+                "export report preview.frame is outside its declared source"
+            )
+        validate_preview_evidence(
+            artifact_files[str(preview["path"])],
+            preview,
+            (int(report["canvas"][0]), int(report["canvas"][1])),
         )
     source_package_value = report.get("source_package")
     if not isinstance(source_package_value, str) or not source_package_value:

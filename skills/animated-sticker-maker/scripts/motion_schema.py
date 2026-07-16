@@ -12,7 +12,7 @@ MAX_RENDER_FRAMES = 240
 MAX_RENDER_PIXELS = 64 * 1024 * 1024
 RESAMPLING_POLICIES = {"lanczos", "nearest"}
 WORK_COLOR_PATTERN = re.compile(r"#[0-9A-Fa-f]{6}")
-LEGACY_RENDER_FIELDS = {
+UNSUPPORTED_RENDER_FIELDS = {
     "frame_dir",
     "frame_count",
     "frame_durations_ms",
@@ -164,11 +164,11 @@ def validate_motion(motion: object, *, packaged: bool) -> dict[str, object]:
     if render is not None:
         if not isinstance(render, dict):
             raise ValueError("motion.render must be an object")
-        legacy_fields = sorted(LEGACY_RENDER_FIELDS.intersection(render))
-        if legacy_fields:
+        unsupported_fields = sorted(UNSUPPORTED_RENDER_FIELDS.intersection(render))
+        if unsupported_fields:
             raise ValueError(
-                "motion.render contains removed schema v1 fields: "
-                + ", ".join(legacy_fields)
+                "motion.render contains unsupported fields: "
+                + ", ".join(unsupported_fields)
             )
         target_fps = render.get("target_fps")
         if not is_positive_int(target_fps) or target_fps > 100:

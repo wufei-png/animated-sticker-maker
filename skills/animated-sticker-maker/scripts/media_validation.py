@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import struct
+from collections.abc import Iterable
 from pathlib import Path
 
 import numpy as np
@@ -37,6 +38,23 @@ def alpha_metrics(image: Image.Image) -> dict[str, object]:
         "border_is_transparent": border_is_transparent,
         "pixel_sha256": hashlib.sha256(image.tobytes()).hexdigest(),
     }
+
+
+def webp_alpha_guard_required(frames: Iterable[Image.Image]) -> bool:
+    """Return whether libwebp needs one nearly opaque pixel to retain Alpha."""
+    first_frame_has_visible_pixels = False
+    for index, frame in enumerate(frames):
+        alpha = np.asarray(frame.getchannel("A"))
+        visible = np.where(alpha > 0)
+        if index == 0:
+            first_frame_has_visible_pixels = bool(visible[0].size)
+        if not visible[0].size:
+            continue
+        left, right = int(visible[1].min()), int(visible[1].max() + 1)
+        top, bottom = int(visible[0].min()), int(visible[0].max() + 1)
+        if np.any(alpha[top:bottom, left:right] < 255):
+            return False
+    return first_frame_has_visible_pixels
 
 
 def webp_animation_durations(path: Path) -> list[int]:

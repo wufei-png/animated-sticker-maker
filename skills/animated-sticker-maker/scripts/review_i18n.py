@@ -100,7 +100,8 @@ LANGUAGE_TEXT: dict[str, dict[str, object]] = {
             "silhouette, expression, and Alpha edges."
         ),
         "platform_preview_alt": "Platform preview PNG",
-        "preview_frame": "Exported preview frame {frame}.",
+        "preview_frame_authored": "Authored preview keyframe {frame}.",
+        "preview_frame_exported": "Exported preview frame {frame}.",
         "show_frame": "Show {label}",
         "semantic_hold_suffix": "semantic hold",
         "thumbnail_alt": "{label} thumbnail",
@@ -112,6 +113,11 @@ LANGUAGE_TEXT: dict[str, dict[str, object]] = {
         "technical_checks": "Technical checks",
         "pass": "PASS",
         "fail": "FAIL",
+        "allowed_deviation": "OUTSIDE DEFAULT · ALLOWED",
+        "policy_overrides": "Explicit policy overrides",
+        "policy_override_detail": (
+            "{source} · actual {actual} · default {minimum}–{maximum}"
+        ),
         "primary_files_hashes": "Primary files and hashes",
         "specification_provenance": "Specification provenance",
         "sampled_thumbnails": (
@@ -300,7 +306,8 @@ LANGUAGE_TEXT: dict[str, dict[str, object]] = {
             "真实尺寸用于判断可读性，5× 视图用于检查轮廓、表情和 Alpha 边缘。"
         ),
         "platform_preview_alt": "平台预览 PNG",
-        "preview_frame": "导出的预览帧：第 {frame} 帧。",
+        "preview_frame_authored": "预览取自创作关键帧：第 {frame} 帧。",
+        "preview_frame_exported": "预览取自导出时间线：第 {frame} 帧。",
         "show_frame": "查看 {label}",
         "semantic_hold_suffix": "语义停留点",
         "thumbnail_alt": "{label} 缩略图",
@@ -309,6 +316,11 @@ LANGUAGE_TEXT: dict[str, dict[str, object]] = {
         "technical_checks": "技术检查",
         "pass": "通过",
         "fail": "失败",
+        "allowed_deviation": "不符合默认值 · 已显式允许",
+        "policy_overrides": "显式策略豁免",
+        "policy_override_detail": (
+            "{source} · 实际值 {actual} · 默认范围 {minimum}–{maximum}"
+        ),
         "primary_files_hashes": "主要文件与哈希",
         "specification_provenance": "规范来源",
         "sampled_thumbnails": (

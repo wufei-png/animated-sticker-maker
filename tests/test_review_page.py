@@ -231,6 +231,9 @@ class ReviewPageTests(unittest.TestCase):
             )
             html = output.read_text(encoding="utf-8")
 
+            self.assertNotIn("schema_version", model)
+            self.assertNotIn(str(package.resolve()), html)
+            self.assertNotIn(str(report.resolve()), html)
             self.assertEqual(
                 [frame["duration_ms"] for frame in model["inspector"]["frames"]],
                 [200, 200, 600, 200],
@@ -382,6 +385,50 @@ class ReviewPageTests(unittest.TestCase):
             self.assertIn("<title>Animated sticker exposure review</title>", html)
             self.assertIn('"language":"en"', html)
             self.assertIn("Semantic hold", html)
+
+    def test_review_explains_explicit_nonstandard_policy_override(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            motion = json.loads(
+                (FIXTURE / "motion.json").read_text(encoding="utf-8")
+            )
+            motion.pop("render", None)
+            for frame in motion["frames"]:
+                frame["duration_ms"] = 600
+            motion_path = root / "nonstandard-motion.json"
+            motion_path.write_text(json.dumps(motion), encoding="utf-8")
+            package = root / "package"
+            self.require_success(
+                PACKAGE_SCRIPT,
+                "--frames-dir",
+                FIXTURE / "frames",
+                "--motion",
+                motion_path,
+                "--reference-image",
+                FIXTURE / "reference.png",
+                "--output",
+                package,
+                "--expected-size",
+                "16x16",
+                "--allow-nonstandard-timing",
+            )
+            report = package / "validation" / "report.json"
+
+            self.require_success(
+                REVIEW_SCRIPT,
+                report,
+                "--reference-image",
+                FIXTURE / "reference.png",
+            )
+            html = report.with_name("report.review.html").read_text(
+                encoding="utf-8"
+            )
+
+            self.assertIn("OUTSIDE DEFAULT · ALLOWED", html)
+            self.assertIn("Explicit policy overrides", html)
+            self.assertIn("--allow-nonstandard-timing", html)
+            self.assertIn('"actual":2400', html)
+            self.assertIn('"default_range":[1200,2000]', html)
 
     def test_render_export_uses_decoded_gif_with_render_comparison(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

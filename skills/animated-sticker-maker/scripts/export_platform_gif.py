@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import bisect
 import json
 import re
 import tempfile
@@ -12,32 +11,35 @@ from datetime import date
 from pathlib import Path
 from urllib.parse import urlparse
 
-import numpy as np
-from PIL import Image
-
 from artifact_integrity import (
     fingerprint_files,
-    package_fingerprint,
-    render_track_fingerprint,
-    safe_relative_file,
     sha256_path,
 )
-from media_validation import validate_gif
-from motion_schema import is_positive_int, validate_motion
-from validation_integrity import (
-    validate_report_binding,
-    validate_report_state,
-    validation_status,
+from export_package import automatic_preview_frame, load_validated_package
+from export_transaction import (
+    commit_staged_files,
+    direct_export_path,
+    prepare_export_directory,
+    previous_export_artifacts,
 )
+from gif_export_core import (
+    RESAMPLING_FILTERS,
+    collect_palette_samples,
+    export_gif,
+    fit_frame,
+    gif_safe_durations,
+    resample_timeline,
+    write_gif,
+    write_preview,
+)
+from media_validation import validate_gif
+from validation_integrity import (
+    REPORT_SCHEMA_VERSION,
+    validate_report_state,
+)
+from validation_schema import validate_report_contract
 
 
-COLOR_CANDIDATES = (255, 224, 192, 160, 128, 96, 64, 48, 32)
-MAX_PALETTE_SAMPLES = 500_000
-TRANSPARENT_INDEX = 255
-RESAMPLING_FILTERS = {
-    "lanczos": Image.Resampling.LANCZOS,
-    "nearest": Image.Resampling.NEAREST,
-}
 PLATFORM_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 
 
@@ -132,476 +134,6 @@ def export_validation_status(
     )
 
 
-def direct_export_path(
-    export_dir: Path,
-    requested: Path | None,
-    default_name: str,
-    label: str,
-) -> Path:
-    if requested is None:
-        path = export_dir / default_name
-    elif not requested.is_absolute() and len(requested.parts) == 1:
-        path = export_dir / requested
-    else:
-        path = requested
-    if path.resolve().parent != export_dir.resolve():
-        raise ValueError(f"{label} must be a direct child of {export_dir}")
-    if path.exists() and not path.is_file():
-        raise ValueError(f"{label} must not replace a directory: {path}")
-    return path
-
-
-def commit_staged_files(
-    entries: list[tuple[Path, Path]], staging: Path
-) -> None:
-    """Replace a related export set together, restoring previous files on error."""
-    backups: dict[Path, Path] = {}
-    committed: list[Path] = []
-    try:
-        for index, (staged, final) in enumerate(entries):
-            if final.exists():
-                backup = staging / f".previous-{index}-{final.name}"
-                final.replace(backup)
-                backups[final] = backup
-            staged.replace(final)
-            committed.append(final)
-    except Exception:
-        for final in reversed(committed):
-            final.unlink(missing_ok=True)
-        for final, backup in backups.items():
-            if backup.exists():
-                backup.replace(final)
-        raise
-
-
-def load_validated_package(
-    package: Path,
-    allow_unvalidated: bool,
-    frame_track: str = "keyframes",
-    track_report: Path | None = None,
-) -> tuple[
-    list[Image.Image],
-    list[int],
-    dict[str, object],
-    dict[str, object],
-    dict[str, object] | None,
-]:
-    motion_path = package / "source" / "motion.json"
-    report_path = package / "validation" / "report.json"
-    frames_dir = package / "source" / "frames"
-    if not motion_path.is_file() or not report_path.is_file() or not frames_dir.is_dir():
-        raise FileNotFoundError(
-            "package must contain source/motion.json, source/frames, and "
-            "validation/report.json"
-        )
-
-    motion = validate_motion(
-        json.loads(motion_path.read_text(encoding="utf-8")),
-        packaged=True,
-    )
-    entries = motion["frames"]
-    assert isinstance(entries, list)
-    durations = [entry.get("duration_ms") for entry in entries if isinstance(entry, dict)]
-    if len(durations) != len(entries) or not all(
-        is_positive_int(value) for value in durations
-    ):
-        raise ValueError("every motion frame must have a positive integer duration_ms")
-
-    report = json.loads(report_path.read_text(encoding="utf-8"))
-    expected_fingerprint = report.get("artifact_fingerprint")
-    if report.get("artifact_scope") != "package_source" or not isinstance(
-        expected_fingerprint, str
-    ):
-        raise ValueError(
-            "package validation report has no bound source artifact fingerprint"
-        )
-    validate_report_binding(report_path, report)
-    actual_fingerprint = package_fingerprint(package)
-    if actual_fingerprint != expected_fingerprint:
-        raise ValueError(
-            "package source changed after validation; repack and repeat validation"
-        )
-    source_validation = validate_report_state(report)
-    validation_complete = source_validation["deliverable_ready"] is True
-    if not validation_complete and not allow_unvalidated:
-        raise ValueError(
-            "package validation is incomplete "
-            f"(aggregate={source_validation['aggregate']!r}, "
-            f"technical={source_validation['technical']!r}, "
-            f"visual={source_validation['visual']!r}); pass both validations first "
-            "or use --allow-unvalidated explicitly"
-        )
-
-    derived_validation = None
-    if frame_track == "keyframes":
-        frame_paths = [
-            safe_relative_file(
-                package / "source",
-                entry.get("file") if isinstance(entry, dict) else None,
-                f"frames[{index}].file",
-            )
-            for index, entry in enumerate(entries)
-        ]
-    elif frame_track == "render":
-        render = motion.get("render")
-        if not isinstance(render, dict):
-            raise ValueError("source/motion.json has no render track metadata")
-        render_entries = render["frames"]
-        assert isinstance(render_entries, list)
-        frame_paths = [
-            safe_relative_file(
-                package / "source",
-                entry.get("file") if isinstance(entry, dict) else None,
-                f"render.frames[{index}].file",
-            )
-            for index, entry in enumerate(render_entries)
-        ]
-        durations = [int(entry["duration_ms"]) for entry in render_entries]
-        if track_report is None:
-            if not allow_unvalidated:
-                raise ValueError(
-                    "render track export requires --track-report with aggregate, "
-                    "technical/checks, and visual pass states"
-                )
-        else:
-            derived_report = json.loads(track_report.read_text(encoding="utf-8"))
-            expected_track_fingerprint = derived_report.get("artifact_fingerprint")
-            if derived_report.get("artifact_scope") != "render_track" or not isinstance(
-                expected_track_fingerprint, str
-            ):
-                raise ValueError(
-                    "render-track validation has no bound artifact fingerprint"
-                )
-            validate_report_binding(track_report, derived_report)
-            if render_track_fingerprint(package) != expected_track_fingerprint:
-                raise ValueError(
-                    "render track changed after validation; regenerate and repeat "
-                    "its validation"
-                )
-            derived_validation = validate_report_state(derived_report)
-            derived_complete = derived_validation["deliverable_ready"] is True
-            if not derived_complete and not allow_unvalidated:
-                raise ValueError(
-                    "render track validation is incomplete "
-                    f"({derived_validation}); pass its technical and visual "
-                    "validations first"
-                )
-    else:
-        raise ValueError(f"unsupported frame track: {frame_track}")
-
-    frames: list[Image.Image] = []
-    for path in frame_paths:
-        with Image.open(path) as source:
-            frames.append(source.convert("RGBA"))
-    return frames, durations, motion, source_validation, derived_validation
-
-
-def fit_frame(
-    frame: Image.Image,
-    size: tuple[int, int],
-    resampling: str = "lanczos",
-) -> Image.Image:
-    if resampling not in RESAMPLING_FILTERS:
-        raise ValueError("resampling must be 'lanczos' or 'nearest'")
-    scale = min(size[0] / frame.width, size[1] / frame.height)
-    if resampling == "nearest" and scale >= 1:
-        scale = max(1, int(scale))
-    fitted_size = (
-        max(1, round(frame.width * scale)),
-        max(1, round(frame.height * scale)),
-    )
-    fitted = frame.resize(fitted_size, RESAMPLING_FILTERS[resampling])
-    canvas = Image.new("RGBA", size, (0, 0, 0, 0))
-    canvas.alpha_composite(fitted, ((size[0] - fitted.width) // 2, (size[1] - fitted.height) // 2))
-    return canvas
-
-
-def collect_palette_samples(
-    frames: list[Image.Image],
-    alpha_threshold: int,
-    max_samples: int = MAX_PALETTE_SAMPLES,
-) -> np.ndarray:
-    if max_samples <= 0:
-        raise ValueError("max_samples must be positive")
-    samples: list[np.ndarray] = []
-    frame_count = len(frames)
-    base_budget, extra_budget = divmod(max_samples, max(1, frame_count))
-    for index, frame in enumerate(frames):
-        budget = base_budget + (1 if index < extra_budget else 0)
-        if budget == 0:
-            continue
-        rgba = np.asarray(frame)
-        visible = rgba[..., :3][rgba[..., 3] >= alpha_threshold]
-        if visible.size:
-            if len(visible) > budget:
-                step = max(1, (len(visible) + budget - 1) // budget)
-                visible = visible[::step][:budget]
-            samples.append(visible)
-    if not samples:
-        raise ValueError("frames contain no visible pixels at the selected alpha threshold")
-    rgb = np.concatenate(samples, axis=0)
-    if len(rgb) > max_samples:
-        raise AssertionError("palette sample budget exceeded")
-    return rgb
-
-
-def make_global_palette(
-    frames: list[Image.Image], colors: int, alpha_threshold: int
-) -> Image.Image:
-    rgb = collect_palette_samples(frames, alpha_threshold)
-    sample_image = Image.fromarray(rgb.reshape(1, len(rgb), 3), mode="RGB")
-    palette = sample_image.quantize(
-        colors=colors,
-        method=Image.Quantize.MEDIANCUT,
-        dither=Image.Dither.NONE,
-    )
-    palette_data = palette.getpalette()
-    palette_data[TRANSPARENT_INDEX * 3 : TRANSPARENT_INDEX * 3 + 3] = [0, 0, 0]
-    palette.putpalette(palette_data)
-    return palette
-
-
-def quantize_frames(
-    frames: list[Image.Image], colors: int, alpha_threshold: int
-) -> list[Image.Image]:
-    palette = make_global_palette(frames, colors, alpha_threshold)
-    palette_data = palette.getpalette()
-    result: list[Image.Image] = []
-    for frame in frames:
-        indexed = frame.convert("RGB").quantize(
-            palette=palette,
-            dither=Image.Dither.FLOYDSTEINBERG,
-        )
-        indices = np.asarray(indexed).copy()
-        indices[np.asarray(frame.getchannel("A")) < alpha_threshold] = TRANSPARENT_INDEX
-        indexed = Image.fromarray(indices, mode="P")
-        indexed.putpalette(palette_data)
-        indexed.info["transparency"] = TRANSPARENT_INDEX
-        result.append(indexed)
-    return result
-
-
-def write_gif(
-    frames: list[Image.Image],
-    durations: list[int],
-    path: Path,
-    colors: int,
-    alpha_threshold: int,
-    loop: bool,
-) -> None:
-    indexed = quantize_frames(frames, colors, alpha_threshold)
-    save_options = {
-        "format": "GIF",
-        "save_all": True,
-        "append_images": indexed[1:],
-        "duration": durations,
-        "disposal": 2,
-        "transparency": TRANSPARENT_INDEX,
-        "optimize": True,
-    }
-    if loop:
-        save_options["loop"] = 0
-    indexed[0].save(path, **save_options)
-
-
-def gif_safe_durations(total_ms: int, frame_count: int) -> list[int]:
-    if frame_count <= 0:
-        raise ValueError("frame count must be positive")
-    rounded_total = max(10, round(total_ms / 10) * 10)
-    boundaries = [
-        round((index * rounded_total / frame_count) / 10) * 10
-        for index in range(frame_count + 1)
-    ]
-    durations = [end - start for start, end in zip(boundaries, boundaries[1:])]
-    if any(duration <= 0 for duration in durations):
-        raise ValueError("requested fps is too high for GIF's 10 ms timing precision")
-    return durations
-
-
-def resample_timeline(
-    frames: list[Image.Image], durations: list[int], fps: int
-) -> tuple[list[Image.Image], list[int]]:
-    if len(frames) != len(durations) or not frames:
-        raise ValueError("frames and durations must have equal non-zero length")
-    if fps <= 0 or fps > 100:
-        raise ValueError("fps must be between 1 and 100")
-    total_ms = sum(durations)
-    target_count = max(2, round(total_ms * fps / 1000))
-    source_ends: list[int] = []
-    elapsed = 0
-    for duration in durations:
-        elapsed += duration
-        source_ends.append(elapsed)
-    samples: list[Image.Image] = []
-    for index in range(target_count):
-        timestamp = index * total_ms / target_count
-        source_index = min(
-            len(frames) - 1,
-            bisect.bisect_right(source_ends, timestamp),
-        )
-        samples.append(frames[source_index])
-    return samples, gif_safe_durations(total_ms, target_count)
-
-
-def try_export_gif(
-    frames: list[Image.Image],
-    durations: list[int],
-    output: Path,
-    max_bytes: int | None,
-    alpha_threshold: int,
-    loop: bool,
-    color_candidates: tuple[int, ...],
-    nominal_fps: int | None,
-) -> tuple[tuple[int, int] | None, list[dict[str, int | None]]]:
-    candidate = output.with_suffix(output.suffix + ".candidate")
-    attempts: list[dict[str, int | None]] = []
-    try:
-        for colors in color_candidates:
-            write_gif(frames, durations, candidate, colors, alpha_threshold, loop)
-            byte_size = candidate.stat().st_size
-            attempts.append(
-                {"fps": nominal_fps, "colors": colors, "bytes": byte_size}
-            )
-            if max_bytes is None or byte_size <= max_bytes:
-                candidate.replace(output)
-                return (colors, byte_size), attempts
-    finally:
-        candidate.unlink(missing_ok=True)
-    return None, attempts
-
-
-def export_gif(
-    frames: list[Image.Image],
-    durations: list[int],
-    output: Path,
-    max_bytes: int | None,
-    alpha_threshold: int,
-    loop: bool,
-    min_colors: int = 32,
-    fps_candidates: tuple[int, ...] | None = None,
-) -> tuple[list[Image.Image], list[int], int, int, int | None, list[dict[str, int | None]]]:
-    color_candidates = tuple(
-        colors for colors in COLOR_CANDIDATES if colors >= min_colors
-    )
-    if not color_candidates:
-        raise ValueError(
-            f"minimum color count {min_colors} excludes every supported palette candidate"
-        )
-    variants: list[tuple[int | None, list[Image.Image], list[int]]]
-    if fps_candidates:
-        variants = [
-            (fps, *resample_timeline(frames, durations, fps))
-            for fps in fps_candidates
-        ]
-    else:
-        variants = [(None, frames, durations)]
-
-    all_attempts: list[dict[str, int | None]] = []
-    for nominal_fps, variant_frames, variant_durations in variants:
-        selected, attempts = try_export_gif(
-            variant_frames,
-            variant_durations,
-            output,
-            max_bytes,
-            alpha_threshold,
-            loop,
-            color_candidates,
-            nominal_fps,
-        )
-        all_attempts.extend(attempts)
-        if selected is not None:
-            colors, byte_size = selected
-            return (
-                variant_frames,
-                variant_durations,
-                colors,
-                byte_size,
-                nominal_fps,
-                all_attempts,
-            )
-
-    smallest = min(all_attempts, key=lambda item: int(item["bytes"] or 0))
-    raise ValueError(
-        f"GIF cannot meet {max_bytes} bytes with the requested quality floor; "
-        f"smallest candidate is {smallest['bytes']} bytes at "
-        f"fps={smallest['fps']} and {smallest['colors']} colors"
-    )
-
-
-def write_preview(
-    frame: Image.Image, output: Path, max_bytes: int | None
-) -> tuple[str, int, int | None]:
-    frame.save(output, format="PNG", optimize=True, compress_level=9)
-    byte_size = output.stat().st_size
-    if max_bytes is None or byte_size <= max_bytes:
-        return "rgba", byte_size, None
-
-    smallest: tuple[int, int] | None = None
-    candidate = output.with_suffix(output.suffix + ".candidate")
-    try:
-        for colors in (256, 192, 128, 96, 64, 48, 32, 24, 16):
-            indexed = frame.quantize(
-                colors=colors,
-                method=Image.Quantize.FASTOCTREE,
-                dither=Image.Dither.FLOYDSTEINBERG,
-            )
-            indexed.save(candidate, format="PNG", optimize=True, compress_level=9)
-            candidate_size = candidate.stat().st_size
-            if smallest is None or candidate_size < smallest[1]:
-                smallest = (colors, candidate_size)
-            if candidate_size <= max_bytes:
-                candidate.replace(output)
-                return "indexed", candidate_size, colors
-    finally:
-        candidate.unlink(missing_ok=True)
-    output.unlink(missing_ok=True)
-    assert smallest is not None
-    raise ValueError(
-        f"preview PNG cannot meet {max_bytes} bytes at the requested size; "
-        f"smallest candidate is {smallest[1]} bytes at {smallest[0]} colors"
-    )
-
-
-def automatic_preview_frame(
-    package: Path,
-    motion: dict[str, object],
-    size: tuple[int, int],
-    resampling: str = "lanczos",
-) -> tuple[Image.Image, int]:
-    entries = motion.get("frames")
-    assert isinstance(entries, list) and entries
-    preview_index = max(
-        range(len(entries)),
-        key=lambda index: int(entries[index]["duration_ms"]),
-    )
-    semantic_hold = motion.get("semantic_hold_frame")
-    if isinstance(semantic_hold, str) and semantic_hold:
-        relative = Path(semantic_hold)
-        if not relative.is_absolute() and ".." not in relative.parts:
-            candidate = package / "source" / relative
-            if (
-                candidate.is_file()
-                and candidate.resolve().is_relative_to((package / "source").resolve())
-            ):
-                semantic_name = relative.as_posix()
-                for index, entry in enumerate(entries):
-                    if entry.get("file") == semantic_name:
-                        preview_index = index
-                        with Image.open(candidate) as source:
-                            return (
-                                fit_frame(source.convert("RGBA"), size, resampling),
-                                preview_index,
-                            )
-                raise ValueError(
-                    "semantic_hold_frame must match one authored keyframe entry"
-                )
-    keyframes = sorted((package / "source/frames").glob("*.png"))
-    if len(keyframes) != len(entries):
-        raise ValueError("cannot resolve automatic preview from package keyframes")
-    with Image.open(keyframes[preview_index]) as source:
-        return fit_frame(source.convert("RGBA"), size, resampling), preview_index
-
-
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--package", type=Path, required=True)
@@ -657,9 +189,8 @@ def main() -> None:
     if args.track_report and not args.track_report.resolve().is_relative_to(package):
         parser.error("--track-report must stay beneath the package directory")
 
-    export_dir = package / "exports" / args.platform
-    export_dir.mkdir(parents=True, exist_ok=True)
     try:
+        export_dir = prepare_export_directory(package, args.platform)
         output = direct_export_path(export_dir, args.output, "sticker.gif", "--output")
         preview_output = (
             direct_export_path(
@@ -690,9 +221,15 @@ def main() -> None:
         final_paths.append(preview_output)
     if len({path.resolve() for path in final_paths}) != len(final_paths):
         parser.error("GIF, preview, and report outputs must use distinct paths")
-
-    # Invalidate any older validation report before starting a new export attempt.
-    report_path.unlink(missing_ok=True)
+    try:
+        previous_artifacts = previous_export_artifacts(
+            output,
+            preview_output,
+            report_path,
+            export_dir,
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
 
     frames, durations, motion, source_validation, track_validation = (
         load_validated_package(
@@ -753,6 +290,7 @@ def main() -> None:
                     args.size,
                     str(resampling),
                 )
+                preview_frame_source = "authored"
             else:
                 try:
                     preview_index = int(args.preview_frame) - 1
@@ -763,6 +301,7 @@ def main() -> None:
                 if not 0 <= preview_index < len(exported_frames):
                     raise ValueError("--preview-frame is outside the exported frame range")
                 preview_frame = exported_frames[preview_index]
+                preview_frame_source = "exported"
             staged_preview = staging / preview_output.name
             mode, preview_bytes, preview_colors = write_preview(
                 preview_frame,
@@ -772,6 +311,7 @@ def main() -> None:
             preview_record = {
                 "path": preview_output.name,
                 "frame": preview_index + 1,
+                "frame_source": preview_frame_source,
                 "mode": mode,
                 "colors": preview_colors,
                 "bytes": preview_bytes,
@@ -798,10 +338,12 @@ def main() -> None:
             for name, path in validation_artifact_entries
         ]
         report = {
+            "schema_version": REPORT_SCHEMA_VERSION,
             "status": report_status,
             "source_validation_complete": source_validation_complete,
             "deliverable_ready": False,
             "artifact_scope": "export_files",
+            "policy_overrides": [],
             "artifact_fingerprint": artifact_fingerprint,
             "validation_artifacts": validation_artifacts,
             "technical_validation": {
@@ -853,6 +395,8 @@ def main() -> None:
             },
             "preview": preview_record,
         }
+        validate_report_contract(report)
+        validate_report_state(report)
         staged_report = staging / report_path.name
         staged_report.write_text(
             json.dumps(report, ensure_ascii=False, indent=2) + "\n",
@@ -862,7 +406,16 @@ def main() -> None:
         if staged_preview is not None and preview_output is not None:
             staged_entries.append((staged_preview, preview_output))
         staged_entries.append((staged_report, report_path))
-        commit_staged_files(staged_entries, staging)
+        new_artifacts = {
+            final.resolve()
+            for _, final in staged_entries
+        }
+        removals = tuple(
+            path
+            for path in previous_artifacts
+            if path.resolve() not in new_artifacts
+        )
+        commit_staged_files(staged_entries, staging, removals)
     print(f"Wrote {output} ({gif_bytes} bytes, {colors} colors)")
     if preview_record:
         print(f"Wrote {preview_output} ({preview_record['bytes']} bytes)")

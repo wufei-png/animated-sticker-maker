@@ -22,9 +22,15 @@ from artifact_integrity import (
 from media_validation import (
     alpha_metrics,
     validate_sticker_webp,
+    webp_alpha_guard_required,
     webp_animation_durations,
 )
 from motion_schema import validate_motion, validate_render_pixel_budget
+from validation_integrity import (
+    REPORT_SCHEMA_VERSION,
+    validate_report_binding,
+    validate_report_state,
+)
 
 
 DEFAULT_SIZE = (1024, 1024)
@@ -181,15 +187,8 @@ def prepare_webp_frames(frames: list[Image.Image]) -> tuple[list[Image.Image], b
     opaque. Making one already-visible pixel nearly opaque forces the flag while
     remaining visually indistinguishable.
     """
-    for frame in frames:
-        alpha = np.asarray(frame.getchannel("A"))
-        visible = np.where(alpha > 0)
-        if not visible[0].size:
-            continue
-        left, right = int(visible[1].min()), int(visible[1].max() + 1)
-        top, bottom = int(visible[0].min()), int(visible[0].max() + 1)
-        if np.any(alpha[top:bottom, left:right] < 255):
-            return frames, False
+    if not webp_alpha_guard_required(frames):
+        return frames, False
 
     guarded = [frame.copy() for frame in frames]
     alpha = np.asarray(guarded[0].getchannel("A"))
@@ -248,17 +247,46 @@ def build_candidate(args: argparse.Namespace) -> int:
     metrics = [alpha_metrics(frame) for frame in frames]
 
     checks = {
-        "frame_count_in_default_range": args.allow_nonstandard_frame_count
-        or DEFAULT_FRAME_RANGE[0] <= len(frames) <= DEFAULT_FRAME_RANGE[1],
+        "frame_count_in_default_range": (
+            DEFAULT_FRAME_RANGE[0] <= len(frames) <= DEFAULT_FRAME_RANGE[1]
+        ),
         "source_frames_are_rgba": all(mode == "RGBA" for mode in source_modes),
         "all_frames_match_expected_size": all(frame.size == args.expected_size for frame in frames),
         "all_borders_transparent": all(metric["border_is_transparent"] for metric in metrics),
         "all_frames_have_visible_pixels": all(metric["alpha_bbox"] is not None for metric in metrics),
         "all_frames_are_unique": len({metric["pixel_sha256"] for metric in metrics}) == len(frames),
-        "duration_in_default_range": args.allow_nonstandard_timing
-        or DEFAULT_DURATION_RANGE_MS[0] <= total_duration <= DEFAULT_DURATION_RANGE_MS[1],
+        "duration_in_default_range": (
+            DEFAULT_DURATION_RANGE_MS[0]
+            <= total_duration
+            <= DEFAULT_DURATION_RANGE_MS[1]
+        ),
     }
-    technical_pass = all(checks.values())
+    policy_overrides = []
+    if not checks["frame_count_in_default_range"] and args.allow_nonstandard_frame_count:
+        policy_overrides.append(
+            {
+                "check_id": "frame_count_in_default_range",
+                "source": "--allow-nonstandard-frame-count",
+                "actual": len(frames),
+                "default_range": list(DEFAULT_FRAME_RANGE),
+            }
+        )
+    if not checks["duration_in_default_range"] and args.allow_nonstandard_timing:
+        policy_overrides.append(
+            {
+                "check_id": "duration_in_default_range",
+                "source": "--allow-nonstandard-timing",
+                "actual": total_duration,
+                "default_range": list(DEFAULT_DURATION_RANGE_MS),
+            }
+        )
+    overridden_checks = {
+        str(override["check_id"]) for override in policy_overrides
+    }
+    technical_pass = all(
+        passed or check_id in overridden_checks
+        for check_id, passed in checks.items()
+    )
 
     frame_output, validation_dir = initialize_output(args.output)
     source_dir = args.output / "source"
@@ -312,7 +340,9 @@ def build_candidate(args: argparse.Namespace) -> int:
                 - sum(render_durations) * int(render["target_fps"]) / 1000
             )
             <= 1,
-            "source_frames_are_rgba": all(mode == "RGBA" for mode in render_source_modes),
+            "source_frames_are_rgba": all(
+                mode == "RGBA" for mode in render_source_modes
+            ),
             "all_frames_match_expected_size": all(
                 frame.size == args.expected_size for frame in render_frames
             ),
@@ -353,6 +383,7 @@ def build_candidate(args: argparse.Namespace) -> int:
             "total_duration_ms": sum(render_durations),
         }
         render_report = {
+            "schema_version": REPORT_SCHEMA_VERSION,
             "status": (
                 "pending_visual_validation"
                 if render_pass
@@ -360,6 +391,7 @@ def build_candidate(args: argparse.Namespace) -> int:
             ),
             "deliverable_ready": False,
             "artifact_scope": "render_track",
+            "policy_overrides": [],
             "technical_validation": {
                 "status": "pass" if render_pass else "fail",
                 "checks": render_checks,
@@ -379,10 +411,13 @@ def build_candidate(args: argparse.Namespace) -> int:
     )
     if render_report is not None:
         render_report["artifact_fingerprint"] = render_track_fingerprint(args.output)
-        (validation_dir / "render-report.json").write_text(
+        render_report_path = validation_dir / "render-report.json"
+        render_report_path.write_text(
             json.dumps(render_report, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
+        validate_report_state(render_report)
+        validate_report_binding(render_report_path, render_report)
     resampling = str(packaged_motion["resampling"])
     make_contact_sheet(
         frames,
@@ -423,9 +458,13 @@ def build_candidate(args: argparse.Namespace) -> int:
         except (OSError, ValueError) as exc:
             checks["sticker_is_readable"] = False
             output_validation_error = str(exc)
-        technical_pass = all(checks.values())
+        technical_pass = all(
+            passed or check_id in overridden_checks
+            for check_id, passed in checks.items()
+        )
 
     report = {
+        "schema_version": REPORT_SCHEMA_VERSION,
         "status": (
             "pending_visual_validation"
             if technical_pass
@@ -433,6 +472,7 @@ def build_candidate(args: argparse.Namespace) -> int:
         ),
         "deliverable_ready": False,
         "artifact_scope": "package_source",
+        "policy_overrides": policy_overrides,
         "artifact_fingerprint": package_fingerprint(args.output),
         "technical_validation": {
             "status": "pass" if technical_pass else "fail",
@@ -457,9 +497,12 @@ def build_candidate(args: argparse.Namespace) -> int:
     }
     if output_validation_error is not None:
         report["output_validation_error"] = output_validation_error
-    (validation_dir / "report.json").write_text(
+    report_path = validation_dir / "report.json"
+    report_path.write_text(
         json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
+    validate_report_state(report)
+    validate_report_binding(report_path, report)
 
     if not technical_pass:
         return 2

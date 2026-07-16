@@ -34,6 +34,7 @@ doctor = load_script("doctor_checks")
 review_page = load_script("review_page")
 validation_integrity = sys.modules["validation_integrity"]
 media_validation = sys.modules["media_validation"]
+atomic_io = sys.modules["atomic_io"]
 
 
 def passing_package_checks(*, render: bool = False) -> dict[str, bool]:
@@ -65,6 +66,56 @@ def make_frame(path: Path, color: tuple[int, int, int, int], size: int = 16) -> 
         for x in range(2, size - 2):
             image.putpixel((x, y), color)
     image.save(path)
+
+
+def frame_metrics(paths: list[Path]) -> list[dict[str, object]]:
+    metrics = []
+    for path in paths:
+        with Image.open(path) as image:
+            metrics.append(media_validation.alpha_metrics(image.convert("RGBA")))
+    return metrics
+
+
+def write_sticker_webp(
+    path: Path,
+    frame_paths: list[Path],
+    durations: list[int],
+    *,
+    loop: bool = True,
+    lossless: bool = False,
+) -> bool:
+    frames = []
+    for frame_path in frame_paths:
+        with Image.open(frame_path) as image:
+            frames.append(image.convert("RGBA"))
+    encoded_frames, alpha_guard_applied = package_sticker.prepare_webp_frames(
+        frames
+    )
+    encoded_frames[0].save(
+        path,
+        save_all=True,
+        append_images=encoded_frames[1:],
+        duration=durations,
+        loop=0 if loop else 1,
+        lossless=lossless,
+        quality=92,
+        method=6,
+        minimize_size=True,
+        allow_mixed=not lossless,
+    )
+    return alpha_guard_applied
+
+
+def reference_metadata() -> dict[str, object]:
+    return {
+        "filename": "reference.png",
+        "sha256": "0" * 64,
+        "bytes": 1,
+        "format": "PNG",
+        "mode": "RGBA",
+        "dimensions": [16, 16],
+        "included_path": None,
+    }
 
 
 def motion_plan(

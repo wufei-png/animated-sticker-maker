@@ -7,6 +7,7 @@ import argparse
 import json
 from pathlib import Path
 
+from atomic_io import atomic_write_text
 from validation_integrity import (
     NOTE_FIELDS,
     validate_report_binding,
@@ -37,7 +38,11 @@ def update_report(args: argparse.Namespace) -> None:
         raise ValueError(
             "visual validation notes must be non-empty: " + ", ".join(empty_notes)
         )
-    report["visual_validation"] = {"status": args.status, "notes": notes}
+    report["visual_validation"] = {
+        "status": args.status,
+        "required": list(NOTE_FIELDS),
+        "notes": notes,
+    }
     if technical_status != "pass":
         report["status"] = "technical_validation_failed"
     elif args.status == "pass":
@@ -47,9 +52,9 @@ def update_report(args: argparse.Namespace) -> None:
     report["deliverable_ready"] = report["status"] == "pass"
     validate_report_state(report)
 
-    args.report.write_text(
+    atomic_write_text(
+        args.report,
         json.dumps(report, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
     )
     print(f"Recorded visual validation: {args.status} -> {args.report}")
 

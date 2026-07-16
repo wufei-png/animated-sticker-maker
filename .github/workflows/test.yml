@@ -38,6 +38,9 @@ jobs:
           test -f "$installed/SKILL.md"
           test -f "$installed/references/validation.md"
           test -f "$installed/scripts/package_sticker.py"
+          test -f "$installed/assets/review-page/template.html"
+          test -f "$installed/assets/review-page/style.css"
+          test -f "$installed/assets/review-page/script.js"
           test ! -e "$installed/tests"
           diff -u skills/animated-sticker-maker/SKILL.md "$installed/SKILL.md"
 

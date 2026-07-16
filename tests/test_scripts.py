@@ -14,15 +14,20 @@ from PIL import Image, features
 from support import (
     artifact_integrity,
     export_platform_gif,
+    frame_metrics,
     make_frame,
     media_validation,
     motion_plan,
     motion_schema,
     package_sticker,
     packaged_motion,
+    passing_export_checks,
     passing_package_checks,
     passing_render_checks,
     record_visual_validation,
+    reference_metadata,
+    validation_integrity,
+    write_sticker_webp,
 )
 
 
@@ -109,6 +114,11 @@ class PackageStickerTests(unittest.TestCase):
             report = json.loads(
                 (output / "validation" / "report.json").read_text(encoding="utf-8")
             )
+            self.assertEqual(
+                report["schema_version"],
+                validation_integrity.REPORT_SCHEMA_VERSION,
+            )
+            self.assertEqual(report["policy_overrides"], [])
             self.assertEqual(report["technical_validation"]["status"], "pass")
             self.assertTrue(
                 report["technical_validation"]["checks"]["sticker_transparency_preserved"]
@@ -186,6 +196,161 @@ class PackageStickerTests(unittest.TestCase):
                 artifact_integrity.package_fingerprint(output),
             )
 
+    def test_nonstandard_timing_is_an_explicit_policy_override(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            frames_dir = root / "frames"
+            frames_dir.mkdir()
+            entries = []
+            for index in range(4):
+                name = f"{index}.png"
+                make_frame(
+                    frames_dir / name,
+                    (20 + index * 30, 80 + index * 20, 70, 255),
+                )
+                entries.append({"file": name, "duration_ms": 600})
+            motion_path = root / "motion.json"
+            motion_path.write_text(
+                json.dumps(motion_plan(entries)),
+                encoding="utf-8",
+            )
+            output = root / "package"
+            args = argparse.Namespace(
+                frames_dir=frames_dir,
+                motion=motion_path,
+                reference_image=frames_dir / "0.png",
+                include_reference=False,
+                output=output,
+                expected_size=(16, 16),
+                quality=92,
+                allow_nonstandard_frame_count=False,
+                allow_nonstandard_timing=True,
+            )
+
+            self.assertEqual(package_sticker.package(args), 0)
+            report = json.loads(
+                (output / "validation" / "report.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertFalse(
+                report["technical_validation"]["checks"][
+                    "duration_in_default_range"
+                ]
+            )
+            self.assertEqual(report["technical_validation"]["status"], "pass")
+            self.assertEqual(
+                report["policy_overrides"],
+                [
+                    {
+                        "check_id": "duration_in_default_range",
+                        "source": "--allow-nonstandard-timing",
+                        "actual": 2400,
+                        "default_range": [1200, 2000],
+                    }
+                ],
+            )
+            self.assertEqual(
+                validation_integrity.validate_report_state(report)["technical"],
+                "pass",
+            )
+
+            report["policy_overrides"][0]["source"] = "--unknown"
+            with self.assertRaisesRegex(ValueError, "source must be"):
+                validation_integrity.validate_report_state(report)
+
+    def test_nonstandard_policy_facts_are_bound_to_packaged_motion(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            frames_dir = root / "frames"
+            frames_dir.mkdir()
+            entries = []
+            for index in range(4):
+                name = f"{index}.png"
+                make_frame(
+                    frames_dir / name,
+                    (20 + index * 30, 80 + index * 20, 70, 255),
+                )
+                entries.append({"file": name, "duration_ms": 600})
+            motion_path = root / "motion.json"
+            motion_path.write_text(
+                json.dumps(motion_plan(entries)),
+                encoding="utf-8",
+            )
+            output = root / "package"
+            args = argparse.Namespace(
+                frames_dir=frames_dir,
+                motion=motion_path,
+                reference_image=frames_dir / "0.png",
+                include_reference=False,
+                output=output,
+                expected_size=(16, 16),
+                quality=92,
+                allow_nonstandard_frame_count=False,
+                allow_nonstandard_timing=True,
+            )
+
+            self.assertEqual(package_sticker.package(args), 0)
+            report_path = output / "validation" / "report.json"
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            report["technical_validation"]["checks"][
+                "duration_in_default_range"
+            ] = True
+            report["policy_overrides"] = []
+            report_path.write_text(json.dumps(report), encoding="utf-8")
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "package technical_validation.checks do not match current media",
+            ):
+                validation_integrity.validate_report_binding(
+                    report_path,
+                    report,
+                )
+
+    def test_alpha_guard_evidence_accepts_transparent_holes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            frames_dir = root / "frames"
+            frames_dir.mkdir()
+            entries = []
+            for index in range(4):
+                frame = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+                color = (40 + index * 30, 100, 160, 255)
+                for y in range(2, 14):
+                    for x in range(2, 14):
+                        if not (5 <= x < 11 and 5 <= y < 11):
+                            frame.putpixel((x, y), color)
+                name = f"{index}.png"
+                frame.save(frames_dir / name)
+                entries.append({"file": name, "duration_ms": 300})
+            motion_path = root / "motion.json"
+            motion_path.write_text(
+                json.dumps(motion_plan(entries)),
+                encoding="utf-8",
+            )
+            output = root / "package"
+            args = argparse.Namespace(
+                frames_dir=frames_dir,
+                motion=motion_path,
+                reference_image=frames_dir / "0.png",
+                include_reference=False,
+                output=output,
+                expected_size=(16, 16),
+                quality=92,
+                allow_nonstandard_frame_count=False,
+                allow_nonstandard_timing=False,
+            )
+
+            self.assertEqual(package_sticker.package(args), 0)
+            report_path = output / "validation" / "report.json"
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            self.assertFalse(report["webp_encoding"]["alpha_guard_applied"])
+            validation_integrity.validate_report_binding(
+                report_path,
+                report,
+            )
+
     def test_render_track_is_ingested_from_motion_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -257,6 +422,11 @@ class PackageStickerTests(unittest.TestCase):
                     encoding="utf-8"
                 )
             )
+            self.assertEqual(
+                render_report["schema_version"],
+                validation_integrity.REPORT_SCHEMA_VERSION,
+            )
+            self.assertEqual(render_report["policy_overrides"], [])
             self.assertEqual(render_report["technical_validation"]["status"], "pass")
             self.assertEqual(
                 render_report["artifact_fingerprint"],
@@ -303,11 +473,70 @@ class PackageStickerTests(unittest.TestCase):
             self.assertEqual(package_sticker.package(args), 2)
             self.assertEqual((output / "sticker.webp").read_bytes(), original)
             failed_report = json.loads(
-                (root / "package.failed" / "validation" / "report.json").read_text(
-                    encoding="utf-8"
-                )
+                (
+                    root / "package.failed" / "validation" / "report.json"
+                ).read_text(encoding="utf-8")
             )
             self.assertEqual(failed_report["status"], "technical_validation_failed")
+            self.assertFalse(
+                failed_report["technical_validation"]["checks"][
+                    "source_frames_are_rgba"
+                ]
+            )
+            validation_integrity.validate_report_binding(
+                root / "package.failed" / "validation" / "report.json",
+                failed_report,
+            )
+
+    def test_invalid_candidate_report_cannot_replace_previous_package(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            frames_dir = root / "frames"
+            frames_dir.mkdir()
+            for index in range(4):
+                make_frame(
+                    frames_dir / f"{index}.png",
+                    (20 + index * 30, 80 + index * 20, 70, 255),
+                )
+            motion_path = root / "motion.json"
+            motion_path.write_text(
+                json.dumps(
+                    motion_plan(
+                        [
+                            {"file": f"{index}.png", "duration_ms": 300}
+                            for index in range(4)
+                        ]
+                    )
+                ),
+                encoding="utf-8",
+            )
+            output = root / "package"
+            args = argparse.Namespace(
+                frames_dir=frames_dir,
+                motion=motion_path,
+                reference_image=frames_dir / "0.png",
+                include_reference=False,
+                output=output,
+                expected_size=(16, 16),
+                quality=92,
+                allow_nonstandard_frame_count=False,
+                allow_nonstandard_timing=False,
+            )
+            self.assertEqual(package_sticker.package(args), 0)
+            original = (output / "sticker.webp").read_bytes()
+
+            with mock.patch.object(
+                package_sticker,
+                "validate_report_binding",
+                side_effect=ValueError("candidate report rejected"),
+            ):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "candidate report rejected",
+                ):
+                    package_sticker.package(args)
+
+            self.assertEqual((output / "sticker.webp").read_bytes(), original)
 
     def test_semantic_hold_must_be_an_authored_frame(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -517,7 +746,7 @@ class PackageStickerTests(unittest.TestCase):
                 },
             )
             path.write_text(json.dumps(motion), encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "removed schema v1 fields"):
+            with self.assertRaisesRegex(ValueError, "unsupported fields"):
                 package_sticker.load_motion(path)
 
     def test_render_track_limits_actual_input_pixels_before_conversion(self) -> None:
@@ -629,8 +858,19 @@ class ExportPlatformGifTests(unittest.TestCase):
         for index in range(4):
             make_frame(
                 render_dir / f"{index:04d}.png",
-                (20 + index * 20, 80 + index * 10, 70 + index * 10, 255),
-            )
+                    (20 + index * 20, 80 + index * 10, 70 + index * 10, 255),
+                )
+        reference = reference_metadata()
+        (package / "source" / "reference.json").write_text(
+            json.dumps(reference),
+            encoding="utf-8",
+        )
+        package_frame_metrics = frame_metrics(
+            [frames_dir / "000.png", frames_dir / "001.png"]
+        )
+        render_frame_metrics = frame_metrics(
+            [render_dir / f"{index:04d}.png" for index in range(4)]
+        )
         (package / "source" / "motion.json").write_text(
             json.dumps(
                 packaged_motion(
@@ -652,18 +892,51 @@ class ExportPlatformGifTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
+        alpha_guard_applied = write_sticker_webp(
+            package / "sticker.webp",
+            [frames_dir / "000.png", frames_dir / "001.png"],
+            [600, 600],
+        )
         (validation_dir / "report.json").write_text(
             json.dumps(
                 {
+                    "schema_version": validation_integrity.REPORT_SCHEMA_VERSION,
                     "status": "pass",
                     "artifact_scope": "package_source",
+                    "policy_overrides": [
+                        {
+                            "check_id": "frame_count_in_default_range",
+                            "source": "--allow-nonstandard-frame-count",
+                            "actual": 2,
+                            "default_range": [4, 8],
+                        }
+                    ],
                     "artifact_fingerprint": artifact_integrity.package_fingerprint(package),
+                    "canvas": [16, 16],
+                    "frame_count": 2,
+                    "total_duration_ms": 1200,
+                    "resampling": "lanczos",
+                    "webp_encoding": {
+                        "lossless": False,
+                        "alpha_guard_applied": alpha_guard_applied,
+                    },
+                    "reference": reference,
+                    "render_track": {
+                        "target_fps": 4,
+                        "frame_count": 4,
+                        "total_duration_ms": 1200,
+                    },
+                    "frames": package_frame_metrics,
                     "technical_validation": {
                         "status": "pass",
-                        "checks": passing_package_checks(render=True),
+                        "checks": {
+                            **passing_package_checks(render=True),
+                            "frame_count_in_default_range": False,
+                        },
                     },
                     "visual_validation": {
                         "status": "pass",
+                        "required": list(validation_integrity.NOTE_FIELDS),
                         "notes": {
                             "identity": "stable",
                             "meaning": "clear",
@@ -681,15 +954,22 @@ class ExportPlatformGifTests(unittest.TestCase):
         track_report.write_text(
             json.dumps(
                 {
+                    "schema_version": validation_integrity.REPORT_SCHEMA_VERSION,
                     "status": "pass",
                     "artifact_scope": "render_track",
+                    "policy_overrides": [],
                     "artifact_fingerprint": artifact_integrity.render_track_fingerprint(package),
+                    "target_fps": 4,
+                    "frame_count": 4,
+                    "total_duration_ms": 1200,
+                    "frames": render_frame_metrics,
                     "technical_validation": {
                         "status": "pass",
                         "checks": passing_render_checks(),
                     },
                     "visual_validation": {
                         "status": "pass",
+                        "required": list(validation_integrity.NOTE_FIELDS),
                         "notes": {
                             "identity": "stable",
                             "meaning": "clear",
@@ -711,8 +991,10 @@ class ExportPlatformGifTests(unittest.TestCase):
             (package / "validation" / "report.json").write_text(
                 json.dumps(
                     {
+                        "schema_version": validation_integrity.REPORT_SCHEMA_VERSION,
                         "status": "pass",
                         "artifact_scope": "package_source",
+                        "policy_overrides": [],
                         "artifact_fingerprint": artifact_integrity.package_fingerprint(package),
                         "visual_validation": {"status": "pass"},
                     }
@@ -723,6 +1005,45 @@ class ExportPlatformGifTests(unittest.TestCase):
                 export_platform_gif.load_validated_package(
                     package, allow_unvalidated=False
                 )
+
+    def test_old_or_unversioned_report_requires_regeneration(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            package, _ = self.make_validated_package(Path(temporary))
+            report_path = package / "validation" / "report.json"
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            report.pop("schema_version")
+            report_path.write_text(json.dumps(report), encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "regenerate the package or export"):
+                export_platform_gif.load_validated_package(
+                    package,
+                    allow_unvalidated=False,
+                )
+
+    def test_current_report_contract_requires_package_evidence_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            package, _ = self.make_validated_package(Path(temporary))
+            report_path = package / "validation" / "report.json"
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            report.pop("frames")
+            report_path.write_text(json.dumps(report), encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "missing frames"):
+                validation_integrity.validate_report_binding(
+                    report_path,
+                    report,
+                )
+
+    def test_report_schema_version_requires_an_integer(self) -> None:
+        for schema_version in (True, 1.0):
+            with self.subTest(schema_version=schema_version):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "report.schema_version must be 1",
+                ):
+                    validation_integrity.validate_report_schema(
+                        {"schema_version": schema_version}
+                    )
 
     def test_nested_pass_without_successful_checks_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -743,6 +1064,7 @@ class ExportPlatformGifTests(unittest.TestCase):
             report_path = package / "validation" / "report.json"
             report = json.loads(report_path.read_text(encoding="utf-8"))
             report["technical_validation"]["checks"] = {"placeholder": True}
+            report["policy_overrides"] = []
             report_path.write_text(json.dumps(report), encoding="utf-8")
 
             with self.assertRaisesRegex(ValueError, "evidence contract"):
@@ -756,17 +1078,14 @@ class ExportPlatformGifTests(unittest.TestCase):
             package, track_report = self.make_validated_package(Path(temporary))
             source_report_path = package / "validation" / "report.json"
             source_report = json.loads(source_report_path.read_text(encoding="utf-8"))
-            source_report.pop("technical_validation")
+            technical_validation = source_report.pop("technical_validation")
             source_report_path.write_text(json.dumps(source_report), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "technical_validation"):
                 export_platform_gif.load_validated_package(
                     package, allow_unvalidated=False, frame_track="render"
                 )
 
-            source_report["technical_validation"] = {
-                "status": "pass",
-                "checks": passing_package_checks(render=True),
-            }
+            source_report["technical_validation"] = technical_validation
             source_report_path.write_text(json.dumps(source_report), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "requires --track-report"):
                 export_platform_gif.load_validated_package(
@@ -795,7 +1114,10 @@ class ExportPlatformGifTests(unittest.TestCase):
                 package / "source" / "rendered-frames" / "0000.png",
                 (220, 30, 30, 255),
             )
-            with self.assertRaisesRegex(ValueError, "validation artifacts changed"):
+            with self.assertRaisesRegex(
+                ValueError,
+                "render report frames do not match|validation artifacts changed",
+            ):
                 export_platform_gif.load_validated_package(
                     package,
                     allow_unvalidated=False,
@@ -810,7 +1132,11 @@ class ExportPlatformGifTests(unittest.TestCase):
                 package / "source" / "frames" / "000.png",
                 (220, 30, 30, 255),
             )
-            with self.assertRaisesRegex(ValueError, "validation artifacts changed"):
+            with self.assertRaisesRegex(
+                ValueError,
+                "package technical_validation.checks do not match current media|"
+                "package report frames do not match|validation artifacts changed",
+            ):
                 export_platform_gif.load_validated_package(
                     package,
                     allow_unvalidated=False,
@@ -837,7 +1163,7 @@ class ExportPlatformGifTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "sticker.gif"
-            with mock.patch.object(export_platform_gif, "write_gif", side_effect=fake_write):
+            with mock.patch("gif_export_core.write_gif", side_effect=fake_write):
                 _, selected_durations, colors, byte_size, fps, attempts = (
                     export_platform_gif.export_gif(
                         frames,
@@ -985,14 +1311,29 @@ class ExportPlatformGifTests(unittest.TestCase):
                     "--output",
                 )
 
+    def test_export_directory_symlink_cannot_escape_package(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package = root / "package"
+            outside = root / "outside"
+            package.mkdir()
+            outside.mkdir()
+            (package / "exports").symlink_to(outside, target_is_directory=True)
+
+            with self.assertRaisesRegex(ValueError, "must not be a symbolic link"):
+                export_platform_gif.prepare_export_directory(package, "wechat")
+            self.assertEqual(list(outside.iterdir()), [])
+
     def test_export_commit_restores_previous_files_on_failure(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             staging = root / "staging"
             staging.mkdir()
             old_gif = root / "sticker.gif"
+            old_preview = root / "preview.png"
             old_report = root / "report.json"
             old_gif.write_bytes(b"old-gif")
+            old_preview.write_bytes(b"old-preview")
             old_report.write_bytes(b"old-report")
             new_gif = staging / "sticker.gif"
             missing_report = staging / "missing.json"
@@ -1004,9 +1345,427 @@ class ExportPlatformGifTests(unittest.TestCase):
                         (missing_report, old_report),
                     ],
                     staging,
+                    (old_preview,),
                 )
             self.assertEqual(old_gif.read_bytes(), b"old-gif")
+            self.assertEqual(old_preview.read_bytes(), b"old-preview")
             self.assertEqual(old_report.read_bytes(), b"old-report")
+
+    def test_export_backups_cannot_overwrite_staged_custom_report(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            staging = root / "staging"
+            staging.mkdir()
+            old_gif = root / "sticker.gif"
+            old_report = root / "old.JSON"
+            new_report = root / ".previous-2-old.JSON"
+            old_gif.write_bytes(b"old-gif")
+            old_report.write_bytes(b"old-report")
+            staged_gif = staging / "sticker.gif"
+            staged_report = staging / new_report.name
+            staged_gif.write_bytes(b"new-gif")
+            staged_report.write_bytes(b"new-report")
+
+            export_platform_gif.commit_staged_files(
+                [
+                    (staged_gif, old_gif),
+                    (staged_report, new_report),
+                ],
+                staging,
+                (old_report,),
+            )
+
+            self.assertEqual(old_gif.read_bytes(), b"new-gif")
+            self.assertEqual(new_report.read_bytes(), b"new-report")
+            self.assertFalse(old_report.exists())
+
+    def test_previous_export_report_cannot_select_unrelated_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            export_dir = Path(temporary)
+            gif = export_dir / "sticker.gif"
+            unrelated = export_dir / "notes.txt"
+            report = export_dir / "old.json"
+            gif.write_bytes(b"gif")
+            unrelated.write_text("keep", encoding="utf-8")
+            report.write_text(
+                json.dumps(
+                    {
+                        "schema_version": validation_integrity.REPORT_SCHEMA_VERSION,
+                        "status": "pending_visual_validation",
+                        "deliverable_ready": False,
+                        "artifact_scope": "export_files",
+                        "policy_overrides": [],
+                        "technical_validation": {
+                            "status": "pass",
+                            "checks": passing_export_checks(),
+                        },
+                        "visual_validation": {
+                            "status": "pending",
+                            "notes": {},
+                        },
+                        "gif": {"path": gif.name},
+                        "preview": None,
+                        "validation_artifacts": [
+                            {"path": gif.name},
+                            {"path": unrelated.name},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "report fields are invalid|validation_artifacts must exactly match",
+            ):
+                export_platform_gif.previous_export_artifacts(
+                    gif,
+                    None,
+                    export_dir / "new.json",
+                    export_dir,
+                )
+            self.assertEqual(unrelated.read_text(encoding="utf-8"), "keep")
+
+    def test_export_preview_path_cannot_be_owned_by_another_set(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            package, _ = self.make_validated_package(Path(temporary))
+            argv = [
+                "export_platform_gif.py",
+                "--package",
+                str(package),
+                "--platform",
+                "preview-owner",
+                "--size",
+                "16x16",
+                "--output",
+                "a.gif",
+                "--preview-output",
+                "shared.png",
+                "--report-output",
+                "a.json",
+                "--spec-url",
+                "https://example.com/official-spec",
+                "--verified-on",
+                date.today().isoformat(),
+            ]
+            with mock.patch.object(sys, "argv", argv):
+                export_platform_gif.main()
+
+            export_dir = package / "exports" / "preview-owner"
+            with self.assertRaisesRegex(ValueError, "already owned"):
+                export_platform_gif.previous_export_artifacts(
+                    export_dir / "b.gif",
+                    export_dir / "shared.png",
+                    export_dir / "b.json",
+                    export_dir,
+                )
+
+    def test_previous_export_set_requires_matching_artifact_fingerprint(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            package, _ = self.make_validated_package(Path(temporary))
+            argv = [
+                "export_platform_gif.py",
+                "--package",
+                str(package),
+                "--platform",
+                "fingerprint-owner",
+                "--size",
+                "16x16",
+                "--preview-output",
+                "preview.png",
+                "--spec-url",
+                "https://example.com/official-spec",
+                "--verified-on",
+                date.today().isoformat(),
+            ]
+            with mock.patch.object(sys, "argv", argv):
+                export_platform_gif.main()
+
+            export_dir = package / "exports" / "fingerprint-owner"
+            report_path = export_dir / "sticker.export-report.json"
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            unrelated = export_dir / "unrelated.png"
+            unrelated.write_bytes((export_dir / "preview.png").read_bytes())
+            unrelated_sha = artifact_integrity.sha256_path(unrelated)
+            report["preview"]["path"] = unrelated.name
+            report["preview"]["sha256"] = unrelated_sha
+            report["preview"]["bytes"] = unrelated.stat().st_size
+            report["validation_artifacts"][1] = {
+                "path": unrelated.name,
+                "sha256": unrelated_sha,
+            }
+            report_path.write_text(json.dumps(report), encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "artifact_fingerprint"):
+                export_platform_gif.previous_export_artifacts(
+                    export_dir / "sticker.gif",
+                    None,
+                    export_dir / "new.json",
+                    export_dir,
+                )
+            self.assertTrue(unrelated.is_file())
+
+    def test_previous_export_set_requires_closed_current_report_contract(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            package, _ = self.make_validated_package(Path(temporary))
+            argv = [
+                "export_platform_gif.py",
+                "--package",
+                str(package),
+                "--platform",
+                "cleanup-contract",
+                "--size",
+                "16x16",
+                "--spec-url",
+                "https://example.com/official-spec",
+                "--verified-on",
+                date.today().isoformat(),
+            ]
+            with mock.patch.object(sys, "argv", argv):
+                export_platform_gif.main()
+
+            export_dir = package / "exports" / "cleanup-contract"
+            report_path = export_dir / "sticker.export-report.json"
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            report["unknown_field"] = "not-closed-v1"
+            report_path.write_text(json.dumps(report), encoding="utf-8")
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "unexpected unknown_field",
+            ):
+                export_platform_gif.previous_export_artifacts(
+                    export_dir / "sticker.gif",
+                    None,
+                    export_dir / "new.json",
+                    export_dir,
+                )
+
+    def test_failed_export_preserves_previous_gif_preview_and_report(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            package, _ = self.make_validated_package(Path(temporary))
+            base_argv = [
+                "export_platform_gif.py",
+                "--package",
+                str(package),
+                "--platform",
+                "transaction-test",
+                "--size",
+                "16x16",
+                "--preview-output",
+                "preview.png",
+                "--spec-url",
+                "https://example.com/official-spec",
+                "--verified-on",
+                date.today().isoformat(),
+            ]
+            with mock.patch.object(sys, "argv", base_argv):
+                export_platform_gif.main()
+
+            export_dir = package / "exports" / "transaction-test"
+            paths = {
+                name: export_dir / name
+                for name in (
+                    "sticker.gif",
+                    "preview.png",
+                    "sticker.export-report.json",
+                )
+            }
+            previous = {
+                name: path.read_bytes() for name, path in paths.items()
+            }
+
+            with mock.patch.object(
+                sys,
+                "argv",
+                [*base_argv, "--max-bytes", "1"],
+            ):
+                with self.assertRaisesRegex(ValueError, "cannot meet 1 bytes"):
+                    export_platform_gif.main()
+
+            self.assertEqual(
+                {name: path.read_bytes() for name, path in paths.items()},
+                previous,
+            )
+
+    def test_successful_export_removes_preview_from_previous_export_set(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            package, _ = self.make_validated_package(Path(temporary))
+            base_argv = [
+                "export_platform_gif.py",
+                "--package",
+                str(package),
+                "--platform",
+                "preview-removal",
+                "--size",
+                "16x16",
+                "--spec-url",
+                "https://example.com/official-spec",
+                "--verified-on",
+                date.today().isoformat(),
+            ]
+            with mock.patch.object(
+                sys,
+                "argv",
+                [*base_argv, "--preview-output", "preview.png"],
+            ):
+                export_platform_gif.main()
+
+            export_dir = package / "exports" / "preview-removal"
+            preview = export_dir / "preview.png"
+            self.assertTrue(preview.is_file())
+
+            with mock.patch.object(sys, "argv", base_argv):
+                export_platform_gif.main()
+
+            report = json.loads(
+                (export_dir / "sticker.export-report.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertFalse(preview.exists())
+            self.assertIsNone(report["preview"])
+            self.assertEqual(
+                [artifact["path"] for artifact in report["validation_artifacts"]],
+                ["sticker.gif"],
+            )
+
+    def test_successful_export_replaces_set_when_report_name_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            package, _ = self.make_validated_package(Path(temporary))
+            base_argv = [
+                "export_platform_gif.py",
+                "--package",
+                str(package),
+                "--platform",
+                "report-rename",
+                "--size",
+                "16x16",
+                "--spec-url",
+                "https://example.com/official-spec",
+                "--verified-on",
+                date.today().isoformat(),
+            ]
+            with mock.patch.object(
+                sys,
+                "argv",
+                [
+                    *base_argv,
+                    "--preview-output",
+                    "preview.png",
+                    "--report-output",
+                    "old.JSON",
+                ],
+            ):
+                export_platform_gif.main()
+
+            export_dir = package / "exports" / "report-rename"
+            with mock.patch.object(
+                sys,
+                "argv",
+                [*base_argv, "--report-output", "new.JSON"],
+            ):
+                export_platform_gif.main()
+
+            self.assertTrue((export_dir / "sticker.gif").is_file())
+            self.assertTrue((export_dir / "new.JSON").is_file())
+            self.assertFalse((export_dir / "old.JSON").exists())
+            self.assertFalse((export_dir / "preview.png").exists())
+
+    def test_low_fps_render_auto_preview_uses_authored_frame_source(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            frames_dir = root / "frames"
+            render_dir = root / "render"
+            frames_dir.mkdir()
+            render_dir.mkdir()
+            for index in range(8):
+                make_frame(
+                    frames_dir / f"{index}.png",
+                    (20 + index * 20, 60 + index * 10, 80, 255),
+                )
+            for index in range(2):
+                make_frame(
+                    render_dir / f"{index}.png",
+                    (60 + index * 80, 100, 120, 255),
+                )
+            motion_path = root / "motion.json"
+            motion_path.write_text(
+                json.dumps(
+                    motion_plan(
+                        [
+                            {"file": f"{index}.png", "duration_ms": 250}
+                            for index in range(8)
+                        ],
+                        semantic_hold_frame="7.png",
+                        render={
+                            "target_fps": 1,
+                            "frames": [
+                                {
+                                    "file": f"render/{index}.png",
+                                    "duration_ms": 1000,
+                                }
+                                for index in range(2)
+                            ],
+                        },
+                    )
+                ),
+                encoding="utf-8",
+            )
+            package = root / "package"
+            args = argparse.Namespace(
+                frames_dir=frames_dir,
+                motion=motion_path,
+                reference_image=frames_dir / "0.png",
+                include_reference=False,
+                output=package,
+                expected_size=(16, 16),
+                quality=92,
+                allow_nonstandard_frame_count=False,
+                allow_nonstandard_timing=False,
+            )
+            self.assertEqual(package_sticker.package(args), 0)
+
+            argv = [
+                "export_platform_gif.py",
+                "--package",
+                str(package),
+                "--allow-unvalidated",
+                "--platform",
+                "low-fps",
+                "--size",
+                "16x16",
+                "--frame-track",
+                "render",
+                "--preview-output",
+                "preview.png",
+                "--spec-url",
+                "https://example.com/official-spec",
+                "--verified-on",
+                date.today().isoformat(),
+            ]
+            with mock.patch.object(sys, "argv", argv):
+                export_platform_gif.main()
+
+            report_path = (
+                package
+                / "exports"
+                / "low-fps"
+                / "sticker.export-report.json"
+            )
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            self.assertEqual(report["source_frame_count"], 2)
+            self.assertEqual(report["preview"]["frame"], 8)
+            self.assertEqual(
+                report["preview"]["frame_source"],
+                "authored",
+            )
+            validation_integrity.validate_report_binding(
+                report_path,
+                report,
+            )
 
     def test_export_report_requires_visual_validation_of_exact_files(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -1033,6 +1792,11 @@ class ExportPlatformGifTests(unittest.TestCase):
                 / "sticker.export-report.json"
             )
             report = json.loads(report_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                report["schema_version"],
+                validation_integrity.REPORT_SCHEMA_VERSION,
+            )
+            self.assertEqual(report["policy_overrides"], [])
             self.assertEqual(report["status"], "pending_visual_validation")
             self.assertFalse(report["deliverable_ready"])
             self.assertEqual(
