@@ -120,7 +120,16 @@ Use `scripts/doctor.py package <output/name>` when diagnosing a package or check
 
 ### 7. Perform visual validation and deliver
 
-Read [references/validation.md](references/validation.md). Inspect the animation, contact sheet, semantic hold, Alpha edges on light and dark backgrounds, and the subject at small-icon size. This is maker-side validation, not an approval workflow or separate reviewer role. Record the result in `validation/report.json`; scripted checks do not replace visual inspection.
+Read [references/validation.md](references/validation.md). When an exact report reaches visual validation and its artifact is intended for delivery, generate a fresh read-only review page before inspecting or sharing it:
+
+```bash
+python <skill-dir>/scripts/generate_review.py <validation-report.json> \
+  --reference-image <original-reference-image>
+```
+
+Omit `--reference-image` when the package contains its bound reference. Otherwise provide the exact original; the generator rejects a SHA-256 mismatch. Read [references/review-page.md](references/review-page.md) for report scopes, output behavior, and the review-page lifecycle.
+
+Inspect the actual review target, semantic hold, Alpha edges on checker, light, and dark backgrounds, the 50×50 stress view, and the frame exposure sheet. The page is read-only and does not replace maker-side judgment. If the user participates, share the freshly generated HTML and collect their feedback in the conversation; the user does not need to run Python or submit a web form. The agent remains responsible for recording the result in the exact Validation Report.
 
 Record the decision with:
 
@@ -169,6 +178,8 @@ The render track needs its own passed technical and visual validation because it
 Complete the task only when the package and every requested export have passed both validation types and report `deliverable_ready: true`.
 
 Before delivery, `scripts/doctor.py` must report `healthy` for every exact report that will be delivered. A package containing a declared render track reports `incomplete` until both the primary package report and render-track report complete visual validation, even when a keyframe-only export is independently healthy.
+
+Review HTML is an instantaneous derived view. Regenerate it immediately before sharing and again after recording visual validation when the final status needs to be shown. Do not treat an older page as a snapshot, validation artifact, or deliverable.
 
 ## Escalation rule
 

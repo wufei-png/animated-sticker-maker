@@ -10,6 +10,7 @@ All notable changes to this project are documented here.
 - Centralize validation-report evidence checks and bind export validation to unchanged upstream reports.
 - Add one read-only doctor command with deep media checks, three-state results, and versioned JSON output.
 - Add a synthetic golden workflow fixture covering keyframe and render-track exports plus invalidation chains.
+- Add one offline HTML review generator for package, render-track, and export reports.
 - Remove unused cover artwork and consolidate repeated integrity helpers.
 
 ## [0.8.1] - 2026-07-16

@@ -104,6 +104,7 @@ The Skill resolves these paths relative to its own `SKILL.md`:
 - `scripts/record_visual_validation.py` — bind maker-side visual validation to the exact artifact fingerprint.
 - `scripts/export_platform_gif.py` — create size-constrained GIF and optional preview derivatives.
 - `scripts/doctor.py` — re-run deterministic schema, media, state, path, and binding checks without modifying artifacts.
+- `scripts/generate_review.py` — generate one offline, read-only HTML light table for one exact validation report.
 
 Run the doctor against one explicit boundary:
 
@@ -115,6 +116,16 @@ python skills/animated-sticker-maker/scripts/doctor.py --json export \
 
 With no subcommand, doctor diagnoses `.` only when the current directory matches exactly one motion, package, report, or export boundary. Results are `healthy` (`0`), `incomplete` (`2`), or `invalid` (`1`). See [`references/doctor.md`](skills/animated-sticker-maker/references/doctor.md).
 
+Generate a visual review page beside a report:
+
+```bash
+python skills/animated-sticker-maker/scripts/generate_review.py \
+  output/name/validation/report.json \
+  --reference-image path/to/reference.png
+```
+
+The external reference is required only when the package did not use `--include-reference`; its SHA-256 must match the package metadata. The generated HTML is a disposable derived view, not validation evidence or a deliverable. See [`references/review-page.md`](skills/animated-sticker-maker/references/review-page.md).
+
 Platform limits drift. When a platform is named, verify its current official specification and record the source URL and verification date in the export report.
 
 ## Local development
@@ -125,7 +136,7 @@ python -m py_compile skills/animated-sticker-maker/scripts/*.py
 python -m unittest discover -s tests -v
 ```
 
-The test suite exercises packaging, schema validation, Alpha handling, artifact fingerprints, visual-validation invalidation, adaptive GIF export, doctor output, and two subprocess-driven golden workflow scenarios.
+The test suite exercises packaging, schema validation, Alpha handling, artifact fingerprints, visual-validation invalidation, adaptive GIF export, doctor output, offline review pages, and two subprocess-driven golden workflow scenarios.
 
 ## Scope
 

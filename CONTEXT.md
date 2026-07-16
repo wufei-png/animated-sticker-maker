@@ -28,6 +28,10 @@ _Avoid_: Validator, fixer
 A Doctor invocation that explicitly selects a Motion Plan, Package, Validation Report, or Export instead of diagnosing the current directory.
 _Avoid_: Partial doctor, auto scan
 
+**Review Page**:
+An instantaneous, read-only HTML view generated for one exact Validation Report and its bound files. It supports visual inspection but is neither validation evidence nor a deliverable.
+_Avoid_: Approval page, review bundle
+
 **Golden Workflow Fixture**:
 A small synthetic sticker source exercised through two independent workflow scenarios: the default authored-keyframe export and the explicit render-track export. Both scenarios verify artifact structure, state transitions, bindings, and track-specific invalidation behavior from the same input.
 _Avoid_: Golden binary, snapshot package

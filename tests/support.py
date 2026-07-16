@@ -31,6 +31,7 @@ artifact_integrity = load_script("artifact_integrity")
 chroma_key = load_script("chroma_key")
 motion_schema = load_script("motion_schema")
 doctor = load_script("doctor_checks")
+review_page = load_script("review_page")
 validation_integrity = sys.modules["validation_integrity"]
 media_validation = sys.modules["media_validation"]
 

@@ -100,6 +100,7 @@ Skill 会基于自身 `SKILL.md` 所在目录解析以下脚本：
 - `scripts/record_visual_validation.py`：把制作方视觉校验绑定到精确的产物指纹。
 - `scripts/export_platform_gif.py`：生成受体积约束的 GIF 和可选静态预览。
 - `scripts/doctor.py`：只读地重新执行 schema、媒体、状态、路径和绑定检查。
+- `scripts/generate_review.py`：为一个精确 Validation Report 生成离线、只读的 HTML 动画检查台。
 
 可针对一个明确边界运行 doctor：
 
@@ -111,6 +112,16 @@ python skills/animated-sticker-maker/scripts/doctor.py --json export \
 
 不传子命令时，doctor 只会在当前目录能唯一识别为 motion、package、report 或 export 边界时诊断 `.`。结果分为 `healthy`（退出码 `0`）、`incomplete`（`2`）和 `invalid`（`1`）。详见 [`references/doctor.md`](skills/animated-sticker-maker/references/doctor.md)。
 
+可在报告旁生成视觉审阅页面：
+
+```bash
+python skills/animated-sticker-maker/scripts/generate_review.py \
+  output/name/validation/report.json \
+  --reference-image path/to/reference.png
+```
+
+只有 package 未使用 `--include-reference` 时才需要传入外部参考图，并且其 SHA-256 必须匹配 package 元数据。生成的 HTML 是可丢弃的派生视图，不属于验证证据或交付物。详见 [`references/review-page.md`](skills/animated-sticker-maker/references/review-page.md)。
+
 平台限制会变化。指定平台时，应核对当前官方规范，并在导出报告里记录来源 URL 和核对日期。
 
 ## 本地开发
@@ -121,7 +132,7 @@ python -m py_compile skills/animated-sticker-maker/scripts/*.py
 python -m unittest discover -s tests -v
 ```
 
-测试覆盖打包、动作 schema、Alpha、产物指纹、视觉校验失效、GIF 自适应导出、doctor 输出，以及两个通过真实 CLI 运行的 golden workflow 场景。
+测试覆盖打包、动作 schema、Alpha、产物指纹、视觉校验失效、GIF 自适应导出、doctor 输出、离线 Review 页面，以及两个通过真实 CLI 运行的 golden workflow 场景。
 
 ## 范围边界
 

@@ -12,6 +12,16 @@ Use `scripts/doctor.py` to re-run the deterministic checks available from an exi
 
 Run doctor on the exact report before delivery. A package diagnosis aggregates its primary report and every declared render-track report, but does not recursively diagnose platform exports.
 
+## Visual review page
+
+Use `scripts/generate_review.py` when an exact report reaches visual validation and its artifact is intended for delivery. The page is one read-only, offline visual language that switches its main view by `artifact_scope`; it never scans or aggregates unrelated reports.
+
+- `package_source` reviews the actual encoded `sticker.webp` and authored source frames.
+- `render_track` reviews the exact ordered render PNG sequence and clearly labels it as a frame-track preview rather than an encoded deliverable.
+- `export_files` reviews the actual exported GIF, optional preview PNG, and the source track used for that export.
+
+The generator validates report state, fingerprint, bindings, and the reference image before writing. Stale or missing evidence fails closed and leaves an existing Review Page unchanged. Regenerate immediately before sharing; Review HTML is not included in artifact fingerprints and cannot establish or preserve validation.
+
 ## Technical validation
 
 Use the scripts to verify dimensions, file formats, frame count, durations, loop metadata, Alpha, paths, fingerprints, and platform constraints. A failed technical validation must not be overridden by visual judgment.
