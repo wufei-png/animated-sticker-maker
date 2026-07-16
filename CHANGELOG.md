@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-07-17
+
 - Require the complete motion schema v2 contract and reject older schema versions.
 - Make ordered render-frame entries authoritative and remove redundant render counts and duration arrays.
 - Validate render timing density, resource limits, encoded WebP durations, and integer pixel-art scaling.
@@ -19,6 +21,7 @@ All notable changes to this project are documented here.
 - Replace GIF, preview, and export report transactionally so failed exports preserve the previous validated set.
 - Write visual-validation updates atomically and keep Review HTML free of absolute host paths.
 - Split Review media/assets, GIF export stages, and Doctor checks into focused runtime modules while preserving the public CLI behavior.
+- Simplify export reports so GIF and preview records own their file metadata, fingerprints derive from those records directly, and technical checks have one top-level source of truth.
 
 ## [0.8.1] - 2026-07-16
 

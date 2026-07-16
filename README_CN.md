@@ -89,7 +89,7 @@ output/<name>/
 
 只有 `technical_validation` 与 `visual_validation` 都通过，并且报告中 `deliverable_ready: true` 时，产物才可以交付。
 
-当前持久化格式只有动作计划 schema `2` 和 Validation Report schema `1`。Skill 只支持这些当前格式，不提供旧格式兼容解析器或迁移层。Validation Report v1 按 `artifact_scope` 使用封闭字段契约，缺失、未知或类型错误的证据字段都会被拒绝。重新生成旧版导出前，应先整体移除不受支持的旧导出集合。Doctor 的公共 JSON 外壳继续使用 schema `1`。Review Page 的内部 Model 不设版本号，拆分后的 HTML/CSS/JavaScript 源文件仍会生成一个离线 HTML 文档，并内嵌界面资产。
+当前持久化格式只有动作计划 schema `2` 和 Validation Report schema `1`。Skill 只支持这些当前格式，不提供旧格式兼容解析器或迁移层。Validation Report v1 按 `artifact_scope` 使用封闭字段契约，缺失、未知或类型错误的证据字段都会被拒绝。Export Report 中，每个 GIF 或 preview 的路径、哈希与字节数只保存在对应文件记录内；嵌套 GIF validation 只保存编码帧数与时序证据，客观技术检查仅保留在报告顶层。重新生成旧版导出前，应先整体移除不受支持的旧导出集合。Doctor 的公共 JSON 外壳继续使用 schema `1`。Review Page 的内部 Model 不设版本号，拆分后的 HTML/CSS/JavaScript 源文件仍会生成一个离线 HTML 文档，并内嵌界面资产。
 
 可选渲染轨通过显式有序帧数组记录时序，不依赖目录文件名排序。项目发布版本继续独立使用正常的 SemVer，不与产物 schema 混用。
 

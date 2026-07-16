@@ -34,6 +34,8 @@ Package, render-track, and export Validation Reports use `schema_version: 1` and
 
 Every report contains `policy_overrides`. It is normally empty. Only a `package_source` report may use it, and only for the explicit nonstandard frame-count or timing flags. The underlying technical check remains an objective fact and therefore stays `false` outside the default range. Each override records the check ID, CLI flag source, actual value, and default range; technical status is computed from passed checks plus valid explicit overrides.
 
+An export report derives its artifact fingerprint directly from the declared `gif` and optional `preview` files. Those records are the only source for each file's path, SHA-256, and byte count. `technical_validation.checks` is the only source for objective GIF checks; `gif.validation` stores only encoded frame count and timing evidence.
+
 ## Identity
 
 - Compare every anchor and the contact sheet with the reference image.
