@@ -8,6 +8,8 @@ All notable changes to this project are documented here.
 - Make ordered render-frame entries authoritative and remove redundant render counts and duration arrays.
 - Validate render timing density, resource limits, encoded WebP durations, and integer pixel-art scaling.
 - Centralize validation-report evidence checks and bind export validation to unchanged upstream reports.
+- Add one read-only doctor command with deep media checks, three-state results, and versioned JSON output.
+- Add a synthetic golden workflow fixture covering keyframe and render-track exports plus invalidation chains.
 - Remove unused cover artwork and consolidate repeated integrity helpers.
 
 ## [0.8.1] - 2026-07-16

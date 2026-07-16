@@ -99,6 +99,17 @@ Skill 会基于自身 `SKILL.md` 所在目录解析以下脚本：
 - `scripts/package_sticker.py`：规范化源帧，以事务方式构建 WebP 包和报告。
 - `scripts/record_visual_validation.py`：把制作方视觉校验绑定到精确的产物指纹。
 - `scripts/export_platform_gif.py`：生成受体积约束的 GIF 和可选静态预览。
+- `scripts/doctor.py`：只读地重新执行 schema、媒体、状态、路径和绑定检查。
+
+可针对一个明确边界运行 doctor：
+
+```bash
+python skills/animated-sticker-maker/scripts/doctor.py package output/name
+python skills/animated-sticker-maker/scripts/doctor.py --json export \
+  output/name/exports/<platform>/<name>.export-report.json
+```
+
+不传子命令时，doctor 只会在当前目录能唯一识别为 motion、package、report 或 export 边界时诊断 `.`。结果分为 `healthy`（退出码 `0`）、`incomplete`（`2`）和 `invalid`（`1`）。详见 [`references/doctor.md`](skills/animated-sticker-maker/references/doctor.md)。
 
 平台限制会变化。指定平台时，应核对当前官方规范，并在导出报告里记录来源 URL 和核对日期。
 
@@ -110,7 +121,7 @@ python -m py_compile skills/animated-sticker-maker/scripts/*.py
 python -m unittest discover -s tests -v
 ```
 
-测试覆盖打包、动作 schema、Alpha、产物指纹、视觉校验失效、GIF 自适应导出和失败安全性。
+测试覆盖打包、动作 schema、Alpha、产物指纹、视觉校验失效、GIF 自适应导出、doctor 输出，以及两个通过真实 CLI 运行的 golden workflow 场景。
 
 ## 范围边界
 

@@ -1,0 +1,57 @@
+{
+  "schema_version": 2,
+  "id": "golden-workflow",
+  "prompt": "A small synthetic tile leans forward, holds, and returns.",
+  "reference_image": "reference.png",
+  "canvas": [16, 16],
+  "resampling": "nearest",
+  "loop": true,
+  "identity_lock": {
+    "subject": "Synthetic coral tile",
+    "fixed": ["coral body", "dark eye", "square silhouette"],
+    "flexible": ["one-pixel lean", "small accent motion"],
+    "forbidden": ["background", "text", "extra subject"]
+  },
+  "generation_plan": {
+    "anchors": ["rest", "lean", "semantic hold", "return"],
+    "deterministic": ["translation", "timing", "accent pixels"]
+  },
+  "transparency": {
+    "strategy": "existing-alpha",
+    "work_color": null
+  },
+  "frames": [
+    {
+      "file": "frames/000.png",
+      "duration_ms": 200,
+      "description": "Neutral rest pose"
+    },
+    {
+      "file": "frames/001.png",
+      "duration_ms": 200,
+      "description": "One-pixel anticipation lean"
+    },
+    {
+      "file": "frames/002.png",
+      "duration_ms": 600,
+      "description": "Clearest forward semantic hold"
+    },
+    {
+      "file": "frames/003.png",
+      "duration_ms": 200,
+      "description": "Return toward the rest pose"
+    }
+  ],
+  "semantic_hold_frame": "frames/002.png",
+  "render": {
+    "target_fps": 5,
+    "frames": [
+      {"file": "render/000.png", "duration_ms": 200},
+      {"file": "render/001.png", "duration_ms": 200},
+      {"file": "render/002.png", "duration_ms": 200},
+      {"file": "render/003.png", "duration_ms": 200},
+      {"file": "render/004.png", "duration_ms": 200},
+      {"file": "render/005.png", "duration_ms": 200}
+    ]
+  }
+}

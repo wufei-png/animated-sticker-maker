@@ -103,6 +103,17 @@ The Skill resolves these paths relative to its own `SKILL.md`:
 - `scripts/package_sticker.py` — normalize source frames and transactionally build the WebP package and reports.
 - `scripts/record_visual_validation.py` — bind maker-side visual validation to the exact artifact fingerprint.
 - `scripts/export_platform_gif.py` — create size-constrained GIF and optional preview derivatives.
+- `scripts/doctor.py` — re-run deterministic schema, media, state, path, and binding checks without modifying artifacts.
+
+Run the doctor against one explicit boundary:
+
+```bash
+python skills/animated-sticker-maker/scripts/doctor.py package output/name
+python skills/animated-sticker-maker/scripts/doctor.py --json export \
+  output/name/exports/<platform>/<name>.export-report.json
+```
+
+With no subcommand, doctor diagnoses `.` only when the current directory matches exactly one motion, package, report, or export boundary. Results are `healthy` (`0`), `incomplete` (`2`), or `invalid` (`1`). See [`references/doctor.md`](skills/animated-sticker-maker/references/doctor.md).
 
 Platform limits drift. When a platform is named, verify its current official specification and record the source URL and verification date in the export report.
 
@@ -114,7 +125,7 @@ python -m py_compile skills/animated-sticker-maker/scripts/*.py
 python -m unittest discover -s tests -v
 ```
 
-The test suite exercises packaging, schema validation, Alpha handling, artifact fingerprints, visual-validation invalidation, adaptive GIF export, and failure safety.
+The test suite exercises packaging, schema validation, Alpha handling, artifact fingerprints, visual-validation invalidation, adaptive GIF export, doctor output, and two subprocess-driven golden workflow scenarios.
 
 ## Scope
 

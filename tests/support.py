@@ -19,6 +19,7 @@ def load_script(name: str):
     spec = importlib.util.spec_from_file_location(name, path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -29,6 +30,32 @@ record_visual_validation = load_script("record_visual_validation")
 artifact_integrity = load_script("artifact_integrity")
 chroma_key = load_script("chroma_key")
 motion_schema = load_script("motion_schema")
+doctor = load_script("doctor_checks")
+validation_integrity = sys.modules["validation_integrity"]
+media_validation = sys.modules["media_validation"]
+
+
+def passing_package_checks(*, render: bool = False) -> dict[str, bool]:
+    check_ids = (
+        validation_integrity.PACKAGE_SOURCE_CHECK_IDS
+        | validation_integrity.PACKAGE_WEBP_CHECK_IDS
+    )
+    if render:
+        check_ids = check_ids | {"render_track_technical_validation_pass"}
+    return {check_id: True for check_id in check_ids}
+
+
+def passing_render_checks() -> dict[str, bool]:
+    return {
+        check_id: True
+        for check_id in validation_integrity.RENDER_TRACK_CHECK_IDS
+    }
+
+
+def passing_export_checks() -> dict[str, bool]:
+    return {
+        check_id: True for check_id in validation_integrity.EXPORT_GIF_CHECK_IDS
+    }
 
 
 def make_frame(path: Path, color: tuple[int, int, int, int], size: int = 16) -> None:

@@ -77,6 +77,10 @@ def validate_motion(motion: object, *, packaged: bool) -> dict[str, object]:
     require_nonempty_string(motion.get("id"), "motion.id")
     require_nonempty_string(motion.get("prompt"), "motion.prompt")
     if packaged:
+        if "reference_image" in motion:
+            raise ValueError(
+                "packaged motion must use motion.reference instead of reference_image"
+            )
         reference = motion.get("reference")
         if not isinstance(reference, dict):
             raise ValueError("motion.reference must be an object in a packaged motion plan")
@@ -88,6 +92,10 @@ def validate_motion(motion: object, *, packaged: bool) -> dict[str, object]:
         if included_path is not None:
             validate_relative_path(included_path, "motion.reference.included_path")
     else:
+        if "reference" in motion:
+            raise ValueError(
+                "working motion must use motion.reference_image instead of reference"
+            )
         require_nonempty_string(motion.get("reference_image"), "motion.reference_image")
 
     canvas = motion.get("canvas")
@@ -141,6 +149,12 @@ def validate_motion(motion: object, *, packaged: bool) -> dict[str, object]:
     frames = validate_frame_entries(motion.get("frames"), "motion.frames")
     for index, frame in enumerate(frames):
         require_nonempty_string(frame.get("description"), f"motion.frames[{index}].description")
+        if packaged:
+            expected_path = f"frames/{index:03d}.png"
+            if frame.get("file") != expected_path:
+                raise ValueError(
+                    f"packaged motion.frames[{index}].file must be {expected_path!r}"
+                )
 
     semantic_hold = motion.get("semantic_hold_frame")
     if semantic_hold is not None:
@@ -164,6 +178,14 @@ def validate_motion(motion: object, *, packaged: bool) -> dict[str, object]:
             raise ValueError(
                 f"motion.render.frames may contain at most {MAX_RENDER_FRAMES} frames"
             )
+        if packaged:
+            for index, frame in enumerate(render_frames):
+                expected_path = f"rendered-frames/{index:04d}.png"
+                if frame.get("file") != expected_path:
+                    raise ValueError(
+                        "packaged motion.render.frames"
+                        f"[{index}].file must be {expected_path!r}"
+                    )
         validate_render_pixel_budget(
             len(render_frames) * int(canvas[0]) * int(canvas[1])
         )

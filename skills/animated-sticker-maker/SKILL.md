@@ -116,6 +116,8 @@ When `motion.render` is present, the packager follows its explicit ordered `fram
 
 Every successful repack creates new validation reports with visual validation pending. Re-run visual validation after every repack; never preserve a prior pass across changed artifacts.
 
+Use `scripts/doctor.py package <output/name>` when diagnosing a package or checking whether every declared component is healthy. Read [references/doctor.md](references/doctor.md) for scoped motion, report, export, and JSON usage. Doctor is read-only and does not replace visual inspection; `incomplete` is the expected result while any applicable visual validation remains pending.
+
 ### 7. Perform visual validation and deliver
 
 Read [references/validation.md](references/validation.md). Inspect the animation, contact sheet, semantic hold, Alpha edges on light and dark backgrounds, and the subject at small-icon size. This is maker-side validation, not an approval workflow or separate reviewer role. Record the result in `validation/report.json`; scripted checks do not replace visual inspection.
@@ -165,6 +167,8 @@ python <skill-dir>/scripts/export_platform_gif.py \
 The render track needs its own passed technical and visual validation because it is a separate temporal artifact. `motion.render.target_fps` is the user-facing numeric generation target. `--fps-candidates` is an export fallback policy: the exporter searches palette sizes down to `--min-colors` at the preferred frame rate, then tries the next candidate. Do not create or select this track silently, and do not put subject-specific frame rates, palette floors, or platform limits into the generic Skill.
 
 Complete the task only when the package and every requested export have passed both validation types and report `deliverable_ready: true`.
+
+Before delivery, `scripts/doctor.py` must report `healthy` for every exact report that will be delivered. A package containing a declared render track reports `incomplete` until both the primary package report and render-track report complete visual validation, even when a keyframe-only export is independently healthy.
 
 ## Escalation rule
 

@@ -15,10 +15,13 @@ from support import (
     artifact_integrity,
     export_platform_gif,
     make_frame,
+    media_validation,
     motion_plan,
     motion_schema,
     package_sticker,
     packaged_motion,
+    passing_package_checks,
+    passing_render_checks,
     record_visual_validation,
 )
 
@@ -625,7 +628,7 @@ class ExportPlatformGifTests(unittest.TestCase):
         make_frame(frames_dir / "001.png", (80, 140, 130, 255))
         for index in range(4):
             make_frame(
-                render_dir / f"{index:03d}.png",
+                render_dir / f"{index:04d}.png",
                 (20 + index * 20, 80 + index * 10, 70 + index * 10, 255),
             )
         (package / "source" / "motion.json").write_text(
@@ -639,7 +642,7 @@ class ExportPlatformGifTests(unittest.TestCase):
                         "target_fps": 4,
                         "frames": [
                             {
-                                "file": f"rendered-frames/{index:03d}.png",
+                                "file": f"rendered-frames/{index:04d}.png",
                                 "duration_ms": 300,
                             }
                             for index in range(4)
@@ -657,7 +660,7 @@ class ExportPlatformGifTests(unittest.TestCase):
                     "artifact_fingerprint": artifact_integrity.package_fingerprint(package),
                     "technical_validation": {
                         "status": "pass",
-                        "checks": {"package_is_valid": True},
+                        "checks": passing_package_checks(render=True),
                     },
                     "visual_validation": {
                         "status": "pass",
@@ -683,7 +686,7 @@ class ExportPlatformGifTests(unittest.TestCase):
                     "artifact_fingerprint": artifact_integrity.render_track_fingerprint(package),
                     "technical_validation": {
                         "status": "pass",
-                        "checks": {"frame_count": True, "duration": True},
+                        "checks": passing_render_checks(),
                     },
                     "visual_validation": {
                         "status": "pass",
@@ -734,6 +737,20 @@ class ExportPlatformGifTests(unittest.TestCase):
                     allow_unvalidated=False,
                 )
 
+    def test_placeholder_technical_evidence_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            package, _ = self.make_validated_package(Path(temporary))
+            report_path = package / "validation" / "report.json"
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            report["technical_validation"]["checks"] = {"placeholder": True}
+            report_path.write_text(json.dumps(report), encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "evidence contract"):
+                export_platform_gif.load_validated_package(
+                    package,
+                    allow_unvalidated=False,
+                )
+
     def test_render_track_requires_its_own_validation(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             package, track_report = self.make_validated_package(Path(temporary))
@@ -748,7 +765,7 @@ class ExportPlatformGifTests(unittest.TestCase):
 
             source_report["technical_validation"] = {
                 "status": "pass",
-                "checks": {"frames": True, "timing": True},
+                "checks": passing_package_checks(render=True),
             }
             source_report_path.write_text(json.dumps(source_report), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "requires --track-report"):
@@ -775,10 +792,10 @@ class ExportPlatformGifTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             package, track_report = self.make_validated_package(Path(temporary))
             make_frame(
-                package / "source" / "rendered-frames" / "000.png",
+                package / "source" / "rendered-frames" / "0000.png",
                 (220, 30, 30, 255),
             )
-            with self.assertRaisesRegex(ValueError, "changed after validation"):
+            with self.assertRaisesRegex(ValueError, "validation artifacts changed"):
                 export_platform_gif.load_validated_package(
                     package,
                     allow_unvalidated=False,
@@ -793,7 +810,7 @@ class ExportPlatformGifTests(unittest.TestCase):
                 package / "source" / "frames" / "000.png",
                 (220, 30, 30, 255),
             )
-            with self.assertRaisesRegex(ValueError, "changed after validation"):
+            with self.assertRaisesRegex(ValueError, "validation artifacts changed"):
                 export_platform_gif.load_validated_package(
                     package,
                     allow_unvalidated=False,
@@ -1082,6 +1099,35 @@ class ExportPlatformGifTests(unittest.TestCase):
                 package_sticker.webp_animation_durations(path),
                 [123, 456],
             )
+
+    def test_shared_gif_validation_rejects_non_gif_media(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "renamed.gif"
+            frames = []
+            for color in ((30, 90, 80, 255), (80, 140, 130, 255)):
+                frame = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+                for y in range(2, 14):
+                    for x in range(2, 14):
+                        frame.putpixel((x, y), color)
+                frames.append(frame)
+            frames[0].save(
+                path,
+                format="WEBP",
+                save_all=True,
+                append_images=frames[1:],
+                duration=[100, 100],
+                loop=0,
+                lossless=True,
+            )
+
+            with self.assertRaisesRegex(ValueError, "'gif_is_gif': False"):
+                media_validation.validate_gif(
+                    path,
+                    (16, 16),
+                    2,
+                    [100, 100],
+                    True,
+                )
 
 
 if __name__ == "__main__":

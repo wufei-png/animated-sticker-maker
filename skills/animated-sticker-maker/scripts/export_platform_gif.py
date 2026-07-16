@@ -22,8 +22,13 @@ from artifact_integrity import (
     safe_relative_file,
     sha256_path,
 )
+from media_validation import validate_gif
 from motion_schema import is_positive_int, validate_motion
-from validation_integrity import validate_report_state, validation_status
+from validation_integrity import (
+    validate_report_binding,
+    validate_report_state,
+    validation_status,
+)
 
 
 COLOR_CANDIDATES = (255, 224, 192, 160, 128, 96, 64, 48, 32)
@@ -210,6 +215,7 @@ def load_validated_package(
         raise ValueError(
             "package validation report has no bound source artifact fingerprint"
         )
+    validate_report_binding(report_path, report)
     actual_fingerprint = package_fingerprint(package)
     if actual_fingerprint != expected_fingerprint:
         raise ValueError(
@@ -266,6 +272,7 @@ def load_validated_package(
                 raise ValueError(
                     "render-track validation has no bound artifact fingerprint"
                 )
+            validate_report_binding(track_report, derived_report)
             if render_track_fingerprint(package) != expected_track_fingerprint:
                 raise ValueError(
                     "render track changed after validation; regenerate and repeat "
@@ -595,65 +602,6 @@ def automatic_preview_frame(
         return fit_frame(source.convert("RGBA"), size, resampling), preview_index
 
 
-def validate_gif(
-    path: Path,
-    size: tuple[int, int],
-    frame_count: int,
-    durations: list[int],
-    loop: bool,
-    allow_frame_collapse: bool = False,
-) -> dict[str, object]:
-    expected_loop = 0 if loop else None
-    actual_durations: list[int | None] = []
-    transparent_borders: list[bool] = []
-    with Image.open(path) as image:
-        encoded_frame_count = getattr(image, "n_frames", 1)
-        encoded_size = image.size
-        for index in range(encoded_frame_count):
-            image.seek(index)
-            actual_durations.append(image.info.get("duration"))
-            alpha = np.asarray(image.convert("RGBA").getchannel("A"))
-            transparent_borders.append(
-                bool(
-                    np.all(alpha[0] == 0)
-                    and np.all(alpha[-1] == 0)
-                    and np.all(alpha[:, 0] == 0)
-                    and np.all(alpha[:, -1] == 0)
-                )
-            )
-        encoded_loop = image.info.get("loop")
-    actual_duration_values = [
-        value for value in actual_durations if isinstance(value, int)
-    ]
-    frame_count_matches = encoded_frame_count == frame_count
-    if allow_frame_collapse:
-        frame_count_matches = 1 < encoded_frame_count <= frame_count
-    durations_preserved = len(actual_durations) == len(durations) and all(
-        isinstance(actual, int) and abs(actual - expected) <= 10
-        for actual, expected in zip(actual_durations, durations)
-    )
-    if allow_frame_collapse:
-        durations_preserved = (
-            len(actual_duration_values) == len(actual_durations)
-            and abs(sum(actual_duration_values) - sum(durations)) <= 10
-        )
-    checks = {
-        "size_matches": encoded_size == size,
-        "frame_count_matches": frame_count_matches,
-        "durations_preserved": durations_preserved,
-        "loop_matches": encoded_loop == expected_loop,
-        "all_borders_transparent": all(transparent_borders),
-    }
-    if not all(checks.values()):
-        raise ValueError(f"exported GIF validation failed: {checks}")
-    return {
-        "checks": checks,
-        "encoded_frame_count": encoded_frame_count,
-        "durations_ms": actual_durations,
-        "total_duration_ms": sum(actual_duration_values),
-    }
-
-
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--package", type=Path, required=True)
@@ -827,6 +775,7 @@ def main() -> None:
                 "mode": mode,
                 "colors": preview_colors,
                 "bytes": preview_bytes,
+                "max_bytes": args.preview_max_bytes,
                 "sha256": sha256_path(staged_preview),
             }
 

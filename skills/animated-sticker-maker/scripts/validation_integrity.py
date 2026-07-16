@@ -4,7 +4,10 @@
 from __future__ import annotations
 
 import json
+import re
+from datetime import date
 from pathlib import Path
+from urllib.parse import urlparse
 
 from artifact_integrity import (
     package_fingerprint,
@@ -13,9 +16,46 @@ from artifact_integrity import (
     safe_relative_file,
     sha256_path,
 )
+from motion_schema import validate_motion
 
 
 NOTE_FIELDS = ("identity", "meaning", "loop", "alpha", "small_size")
+PACKAGE_SOURCE_CHECK_IDS = {
+    "frame_count_in_default_range",
+    "source_frames_are_rgba",
+    "all_frames_match_expected_size",
+    "all_borders_transparent",
+    "all_frames_have_visible_pixels",
+    "all_frames_are_unique",
+    "duration_in_default_range",
+}
+PACKAGE_WEBP_CHECK_IDS = {
+    "sticker_is_webp",
+    "sticker_matches_expected_size",
+    "sticker_frame_count_matches_source",
+    "sticker_loop_matches_motion",
+    "sticker_transparency_preserved",
+    "sticker_durations_match_source",
+}
+RENDER_TRACK_CHECK_IDS = {
+    "frame_count_matches_ordered_entries",
+    "duration_count_matches_frames",
+    "total_duration_matches_authored_keyframes",
+    "target_fps_matches_timeline",
+    "source_frames_are_rgba",
+    "all_frames_match_expected_size",
+    "all_borders_transparent",
+    "all_frames_have_visible_pixels",
+}
+EXPORT_GIF_CHECK_IDS = {
+    "gif_is_gif",
+    "size_matches",
+    "frame_count_matches",
+    "durations_preserved",
+    "loop_matches",
+    "all_borders_transparent",
+}
+PLATFORM_PATTERN = re.compile(r"[A-Za-z0-9._-]+")
 
 
 def validation_status(report: dict[str, object]) -> dict[str, object]:
@@ -116,7 +156,143 @@ def _load_json_object(path: Path, label: str) -> dict[str, object]:
     return value
 
 
+def _validate_technical_evidence(
+    report_path: Path,
+    report: dict[str, object],
+) -> dict[str, bool]:
+    technical = report.get("technical_validation")
+    if not isinstance(technical, dict):
+        raise ValueError("report.technical_validation must be an object")
+    checks = technical.get("checks")
+    if not isinstance(checks, dict) or not checks:
+        raise ValueError("technical_validation.checks must be a non-empty object")
+    if any(not isinstance(value, bool) for value in checks.values()):
+        raise ValueError("every technical_validation check must be boolean")
+    typed_checks = {str(key): value for key, value in checks.items()}
+    scope = report.get("artifact_scope")
+    if scope == "package_source":
+        package = report_path.parent.parent
+        motion = validate_motion(
+            _load_json_object(package / "source" / "motion.json", "packaged motion"),
+            packaged=True,
+        )
+        expected = PACKAGE_SOURCE_CHECK_IDS | PACKAGE_WEBP_CHECK_IDS
+        if isinstance(motion.get("render"), dict):
+            expected = expected | {"render_track_technical_validation_pass"}
+        if technical.get("status") == "pass":
+            if set(typed_checks) != expected:
+                raise ValueError(
+                    "package technical_validation.checks must exactly match "
+                    "the package evidence contract"
+                )
+        else:
+            allowed = expected | {"sticker_is_readable"}
+            if not PACKAGE_SOURCE_CHECK_IDS.issubset(typed_checks) or not set(
+                typed_checks
+            ).issubset(allowed):
+                raise ValueError(
+                    "failed package technical_validation.checks do not match "
+                    "the package evidence contract"
+                )
+    elif scope == "render_track":
+        if set(typed_checks) != RENDER_TRACK_CHECK_IDS:
+            raise ValueError(
+                "render technical_validation.checks must exactly match "
+                "the render-track evidence contract"
+            )
+    elif scope == "export_files":
+        if set(typed_checks) != EXPORT_GIF_CHECK_IDS:
+            raise ValueError(
+                "export technical_validation.checks must exactly match "
+                "the GIF evidence contract"
+            )
+    else:
+        raise ValueError(
+            "report artifact_scope must be 'package_source', "
+            "'render_track', or 'export_files'"
+        )
+    return typed_checks
+
+
+def _validate_export_metadata(
+    report_path: Path,
+    report: dict[str, object],
+    motion: dict[str, object],
+) -> None:
+    platform = report.get("platform")
+    if (
+        not isinstance(platform, str)
+        or not PLATFORM_PATTERN.fullmatch(platform)
+        or platform in {".", ".."}
+    ):
+        raise ValueError("export report platform must be one safe path segment")
+    if platform != report_path.parent.name:
+        raise ValueError("export report platform must match its export directory")
+
+    spec_url = report.get("spec_url")
+    parsed_spec = urlparse(spec_url) if isinstance(spec_url, str) else None
+    if (
+        parsed_spec is None
+        or parsed_spec.scheme not in {"http", "https"}
+        or not parsed_spec.netloc
+    ):
+        raise ValueError("export report spec_url must be an absolute http(s) URL")
+
+    verified_on = report.get("verified_on")
+    if not isinstance(verified_on, str):
+        raise ValueError("export report verified_on must be an ISO date")
+    try:
+        verified_date = date.fromisoformat(verified_on)
+    except ValueError as exc:
+        raise ValueError("export report verified_on must be an ISO date") from exc
+    if verified_date > date.today():
+        raise ValueError("export report verified_on cannot be in the future")
+    if verified_on != verified_date.isoformat():
+        raise ValueError("export report verified_on must use YYYY-MM-DD form")
+
+    if report.get("resampling") != motion.get("resampling"):
+        raise ValueError("export report resampling must match the source motion")
+
+    gif = report.get("gif")
+    if not isinstance(gif, dict):
+        raise ValueError("export report must declare a gif object")
+    gif_bytes = gif.get("bytes")
+    if (
+        not isinstance(gif_bytes, int)
+        or isinstance(gif_bytes, bool)
+        or gif_bytes <= 0
+    ):
+        raise ValueError("export report gif.bytes must be a positive integer")
+    max_bytes = gif.get("max_bytes")
+    if max_bytes is not None and (
+        not isinstance(max_bytes, int)
+        or isinstance(max_bytes, bool)
+        or max_bytes <= 0
+    ):
+        raise ValueError("export report gif.max_bytes must be null or positive")
+
+    preview = report.get("preview")
+    if isinstance(preview, dict):
+        preview_bytes = preview.get("bytes")
+        if (
+            not isinstance(preview_bytes, int)
+            or isinstance(preview_bytes, bool)
+            or preview_bytes <= 0
+        ):
+            raise ValueError("export report preview.bytes must be a positive integer")
+        preview_max_bytes = preview.get("max_bytes")
+        if preview_max_bytes is not None and (
+            not isinstance(preview_max_bytes, int)
+            or isinstance(preview_max_bytes, bool)
+            or preview_max_bytes <= 0
+        ):
+            raise ValueError(
+                "export report preview.max_bytes must be null or positive"
+            )
+
+
 def validate_report_binding(report_path: Path, report: dict[str, object]) -> None:
+    technical_checks = _validate_technical_evidence(report_path, report)
     expected = report.get("artifact_fingerprint")
     if not isinstance(expected, str):
         raise ValueError("report has no artifact fingerprint")
@@ -128,19 +304,85 @@ def validate_report_binding(report_path: Path, report: dict[str, object]) -> Non
     artifacts = report.get("validation_artifacts")
     if not isinstance(artifacts, list) or not artifacts:
         raise ValueError("export report must list validation_artifacts")
+    artifact_paths: list[str] = []
+    artifact_files: dict[str, Path] = {}
+    artifact_digests: dict[str, str] = {}
     for index, artifact in enumerate(artifacts):
         if not isinstance(artifact, dict):
             raise ValueError(f"validation_artifacts[{index}] must be an object")
+        path_value = artifact.get("path")
+        if not isinstance(path_value, str) or not path_value:
+            raise ValueError(f"validation_artifacts[{index}].path must be non-empty")
+        artifact_paths.append(path_value)
         artifact_path = safe_relative_file(
             report_path.parent,
-            artifact.get("path"),
+            path_value,
             f"validation_artifacts[{index}].path",
         )
-        if artifact.get("sha256") != sha256_path(artifact_path):
+        actual_digest = sha256_path(artifact_path)
+        if artifact.get("sha256") != actual_digest:
             raise ValueError(
                 f"validation_artifacts[{index}].sha256 does not match its file"
             )
+        artifact_files[path_value] = artifact_path
+        artifact_digests[path_value] = actual_digest
+    if len(set(artifact_paths)) != len(artifact_paths):
+        raise ValueError("validation_artifacts paths must be unique")
+    gif = report.get("gif")
+    if not isinstance(gif, dict) or not isinstance(gif.get("path"), str):
+        raise ValueError("export report must declare gif.path")
+    if Path(str(gif["path"])).suffix.lower() != ".gif":
+        raise ValueError("export report gif.path must end in .gif")
+    expected_artifact_paths = [str(gif["path"])]
+    preview = report.get("preview")
+    if preview is not None:
+        if not isinstance(preview, dict) or not isinstance(preview.get("path"), str):
+            raise ValueError("export report preview must declare preview.path")
+        if Path(str(preview["path"])).suffix.lower() != ".png":
+            raise ValueError("export report preview.path must end in .png")
+        expected_artifact_paths.append(str(preview["path"]))
+    if artifact_paths != expected_artifact_paths:
+        raise ValueError(
+            "validation_artifacts must exactly match the GIF and optional preview"
+        )
+    gif_path_value = str(gif["path"])
+    gif_path = artifact_files[gif_path_value]
+    gif_size = gif_path.stat().st_size
+    if gif.get("bytes") != gif_size:
+        raise ValueError("export report gif.bytes does not match its file")
+    if gif.get("sha256") != artifact_digests[gif_path_value]:
+        raise ValueError("export report gif.sha256 does not match its file")
+    gif_max_bytes = gif.get("max_bytes")
+    if isinstance(gif_max_bytes, int) and gif_size > gif_max_bytes:
+        raise ValueError("exported GIF exceeds gif.max_bytes")
+    if isinstance(preview, dict):
+        preview_path_value = str(preview["path"])
+        preview_path = artifact_files[preview_path_value]
+        preview_size = preview_path.stat().st_size
+        if preview.get("bytes") != preview_size:
+            raise ValueError("export report preview.bytes does not match its file")
+        if preview.get("sha256") != artifact_digests[preview_path_value]:
+            raise ValueError("export report preview.sha256 does not match its file")
+        preview_max_bytes = preview.get("max_bytes")
+        if (
+            isinstance(preview_max_bytes, int)
+            and preview_size > preview_max_bytes
+        ):
+            raise ValueError("exported preview exceeds preview.max_bytes")
     package = report_path.parent.parent.parent.resolve()
+    motion = validate_motion(
+        _load_json_object(package / "source" / "motion.json", "packaged motion"),
+        packaged=True,
+    )
+    _validate_export_metadata(report_path, report, motion)
+    gif_validation = gif.get("validation")
+    if (
+        not isinstance(gif_validation, dict)
+        or gif_validation.get("checks") != technical_checks
+    ):
+        raise ValueError(
+            "export technical_validation.checks must match gif.validation.checks"
+        )
     source_package_value = report.get("source_package")
     if not isinstance(source_package_value, str) or not source_package_value:
         raise ValueError("export report must declare its source_package")
@@ -160,6 +402,9 @@ def validate_report_binding(report_path: Path, report: dict[str, object]) -> Non
     if source_record.get("sha256") != sha256_path(source_report_path):
         raise ValueError("source validation report changed after export")
     source_report = _load_json_object(source_report_path, "source validation report")
+    if source_report.get("artifact_scope") != "package_source":
+        raise ValueError("source validation report must use package_source scope")
+    validate_report_binding(source_report_path, source_report)
     source_complete_value = report.get("source_validation_complete")
     if not isinstance(source_complete_value, bool):
         raise ValueError("export report source_validation_complete must be boolean")
@@ -204,6 +449,9 @@ def validate_report_binding(report_path: Path, report: dict[str, object]) -> Non
     if track_record.get("sha256") != sha256_path(track_path):
         raise ValueError("render-track report changed after export")
     track_report = _load_json_object(track_path, "render-track report")
+    if track_report.get("artifact_scope") != "render_track":
+        raise ValueError("render-track report must use render_track scope")
+    validate_report_binding(track_path, track_report)
     current_track_status = validate_report_state(
         track_report,
         require_complete=source_complete,

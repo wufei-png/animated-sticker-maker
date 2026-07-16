@@ -2,6 +2,16 @@
 
 Validation is part of making the artifact, not an approval workflow and not a separate reviewer role. Run every applicable check before declaring a package or export deliverable.
 
+## Deterministic diagnosis
+
+Use `scripts/doctor.py` to re-run the deterministic checks available from an existing motion plan, package, validation report, or export. Doctor is read-only, aggregates independent findings, and does not create, repair, or visually approve artifacts.
+
+- `healthy` means every applicable deterministic check and completed validation gate passes.
+- `incomplete` means structure and technical evidence are valid, but an applicable visual validation is still pending.
+- `invalid` means schema, media, paths, bindings, technical validation, or an explicit visual result failed.
+
+Run doctor on the exact report before delivery. A package diagnosis aggregates its primary report and every declared render-track report, but does not recursively diagnose platform exports.
+
 ## Technical validation
 
 Use the scripts to verify dimensions, file formats, frame count, durations, loop metadata, Alpha, paths, fingerprints, and platform constraints. A failed technical validation must not be overridden by visual judgment.
