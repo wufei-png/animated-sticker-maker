@@ -2,6 +2,10 @@
 
 # Animated Sticker Maker
 
+<p align="center">
+  <img src="docs/images/covers/cover-01-pixel-workshop.png" alt="Animated Sticker Maker pixel workshop cover" width="100%">
+</p>
+
 [![Tests](https://github.com/wufei-png/animated-sticker-maker/actions/workflows/test.yml/badge.svg)](https://github.com/wufei-png/animated-sticker-maker/actions/workflows/test.yml)
 [![Agent Skills](https://img.shields.io/badge/Agent%20Skills-compatible-111827)](https://agentskills.io/specification)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
