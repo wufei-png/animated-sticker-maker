@@ -2,6 +2,10 @@
 
 # Animated Sticker Maker
 
+<p align="center">
+  <img src="docs/images/covers/cover-01-pixel-workshop.png" alt="Animated Sticker Maker 像素工作台封面" width="100%">
+</p>
+
 [![Tests](https://github.com/wufei-png/animated-sticker-maker/actions/workflows/test.yml/badge.svg)](https://github.com/wufei-png/animated-sticker-maker/actions/workflows/test.yml)
 [![Agent Skills](https://img.shields.io/badge/Agent%20Skills-compatible-111827)](https://agentskills.io/specification)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
@@ -19,6 +23,30 @@
 - 分别处理连续色调插画和原生像素画，不强制使用同一种重采样方案。
 - 输出带规范化源帧、参考图元数据、动作计划、接触表和校验报告的可追溯包。
 - 在目标平台需要时，从已校验的 RGBA 源帧导出受尺寸和体积约束的 GIF。
+
+## 工作流程
+
+```mermaid
+flowchart TD
+    A["一张参考图 + 一句动作描述"] --> B["推导身份锁与动作计划"]
+    B --> C["生成最少且保持身份一致的锚点"]
+    B --> D["应用确定性变换与精确文字"]
+    C --> E["合成干净的 RGBA 关键帧<br/>以及可选渲染轨"]
+    D --> E
+    E --> F["以事务方式打包 WebP、<br/>规范化源文件与报告"]
+    F --> G{"技术校验是否通过？"}
+    G -- "否" --> H["单独保留失败候选<br/>修改后从动作计划重新运行"]
+    G -- "是" --> I["生成 Review Page<br/>并检查精确编码产物"]
+    I --> J{"视觉校验是否通过？"}
+    J -- "否" --> K["修改受影响的源文件<br/>然后重新打包并校验"]
+    J -- "是" --> L["记录视觉结论<br/>deliverable_ready: true"]
+    L --> M["对精确产物边界运行 Doctor"]
+    M --> N{"是否需要平台派生文件？"}
+    N -- "否" --> O["交付透明 WebP 包"]
+    N -- "是" --> P["从已校验的 RGBA 轨道派生 GIF"]
+    P --> Q["对导出结果执行技术与视觉校验"]
+    Q --> R["运行 Doctor，再交付<br/>母包与派生文件"]
+```
 
 ## 环境要求
 

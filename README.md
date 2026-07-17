@@ -24,6 +24,30 @@ The Skill keeps creative decisions and deterministic production in one workflow:
 - Produces a traceable package with normalized source frames, reference metadata, a motion plan, a contact sheet, and validation reports.
 - Exports constrained GIF derivatives from validated RGBA sources when a target platform requires them.
 
+## Workflow
+
+```mermaid
+flowchart TD
+    A["One reference image + one motion prompt"] --> B["Derive the identity lock and motion plan"]
+    B --> C["Generate the fewest identity-preserving anchors"]
+    B --> D["Apply deterministic transforms and exact text"]
+    C --> E["Compose clean RGBA keyframes<br/>and an optional render track"]
+    D --> E
+    E --> F["Transactionally package WebP,<br/>normalized sources, and reports"]
+    F --> G{"Technical validation passes?"}
+    G -- "No" --> H["Keep the failed candidate separate<br/>Revise, then rerun from the motion plan"]
+    G -- "Yes" --> I["Generate a Review Page<br/>and inspect the exact encoded artifact"]
+    I --> J{"Visual validation passes?"}
+    J -- "No" --> K["Revise the affected source<br/>Then rebuild and revalidate"]
+    J -- "Yes" --> L["Record the visual result<br/>deliverable_ready: true"]
+    L --> M["Run Doctor against the exact artifact boundary"]
+    M --> N{"Platform derivative requested?"}
+    N -- "No" --> O["Deliver the transparent WebP package"]
+    N -- "Yes" --> P["Derive a GIF from a validated RGBA track"]
+    P --> Q["Run export technical and visual validation"]
+    Q --> R["Run Doctor, then deliver<br/>the package and derivative"]
+```
+
 ## Requirements
 
 - An agent host that supports the [Agent Skills specification](https://agentskills.io/specification).
