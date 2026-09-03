@@ -77,7 +77,7 @@ jobs:
         run: python -m pip install "${{ matrix.pillow }}" "numpy>=1.24"
       - name: Lint (ruff)
         if: matrix.python == '3.12'
-        run: python -m pip install ruff && ruff check .
+        run: python -m pip install "ruff==0.16.5" && ruff check .
       - name: Compile scripts
         run: python -m py_compile skills/animated-sticker-maker/scripts/*.py
       - name: Run tests
@@ -92,12 +92,23 @@ jobs:
       - name: Check for whitespace errors
         # `git diff --check` alone compares the working tree against the index
         # and is always empty on a fresh checkout; compare the committed range
-        # against the event base so the gate actually inspects the change.
+        # against the event base so the gate actually inspects the change. A
+        # newly created branch uses the default branch, or the empty tree when
+        # the default branch itself is being created.
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          PUSHED_REF: ${{ github.ref_name }}
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git diff --check "${{ github.event.pull_request.base.sha }}...HEAD"
           elif [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
             git diff --check "${{ github.event.before }}...HEAD"
+          elif [ "$PUSHED_REF" = "$DEFAULT_BRANCH" ]; then
+            empty_tree=$(git hash-object -t tree /dev/null)
+            git diff --check "$empty_tree" HEAD
+          elif git show-ref --verify --quiet "refs/remotes/origin/$DEFAULT_BRANCH"; then
+            git diff --check "origin/$DEFAULT_BRANCH...HEAD"
           else
-            git show --check --format= HEAD
+            empty_tree=$(git hash-object -t tree /dev/null)
+            git diff --check "$empty_tree" HEAD
           fi
