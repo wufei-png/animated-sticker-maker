@@ -12,6 +12,12 @@ SCRIPTS_DIR = SKILL_DIR / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
+# Import gif_export_core through the normal import machinery (which returns
+# the already-loaded module) rather than a sys.modules lookup, so this binding
+# stays robust if the transitive import chain ever changes. Re-exported for
+# tests via `from support import gif_export_core`.
+import gif_export_core  # noqa: E402,F401 - path set above; deliberate re-export
+
 
 def load_script(name: str):
     path = SCRIPTS_DIR / f"{name}.py"
@@ -31,7 +37,6 @@ chroma_key = load_script("chroma_key")
 motion_schema = load_script("motion_schema")
 doctor = load_script("doctor_checks")
 review_page = load_script("review_page")
-gif_export_core = sys.modules["gif_export_core"]
 validation_integrity = sys.modules["validation_integrity"]
 media_validation = sys.modules["media_validation"]
 atomic_io = sys.modules["atomic_io"]

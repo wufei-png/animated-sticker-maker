@@ -51,6 +51,9 @@ class GoldenWorkflowTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls._shared_root = Path(tempfile.mkdtemp())
+        # addClassCleanup runs even when setUpClass raises, which
+        # tearDownClass does not; prevents leaking a partial scenario tree.
+        cls.addClassCleanup(shutil.rmtree, cls._shared_root, ignore_errors=True)
         builder = cls()
         cls._shared_keyframes = builder.build_passed_scenario(
             cls._shared_root / "keyframes",
@@ -60,11 +63,6 @@ class GoldenWorkflowTests(unittest.TestCase):
             cls._shared_root / "render",
             "render",
         )
-
-    @classmethod
-    def tearDownClass(cls) -> None:
-        if cls._shared_root is not None:
-            shutil.rmtree(cls._shared_root, ignore_errors=True)
 
     def run_cli(
         self,

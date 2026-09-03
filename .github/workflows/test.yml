@@ -64,6 +64,10 @@ jobs:
             pillow: "Pillow>=12,<13"
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          # The whitespace gate compares against the pushed/PR base, so the
+          # full history must be available (default fetch-depth 1 is shallow).
+          fetch-depth: 0
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: ${{ matrix.python }}
@@ -86,4 +90,14 @@ jobs:
           coverage run -m unittest discover -s tests -v
           coverage report -m
       - name: Check for whitespace errors
-        run: git diff --check
+        # `git diff --check` alone compares the working tree against the index
+        # and is always empty on a fresh checkout; compare the committed range
+        # against the event base so the gate actually inspects the change.
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git diff --check "${{ github.event.pull_request.base.sha }}...HEAD"
+          elif [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+            git diff --check "${{ github.event.before }}...HEAD"
+          else
+            git show --check --format= HEAD
+          fi
