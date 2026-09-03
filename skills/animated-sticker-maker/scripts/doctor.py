@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Read-only diagnosis for one animated-sticker artifact boundary."""
 
 from __future__ import annotations

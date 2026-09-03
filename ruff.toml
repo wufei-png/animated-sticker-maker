@@ -1,0 +1,35 @@
+# Ruff lint configuration for the animated-sticker-maker repository.
+# Run `ruff check .` before committing; CI enforces the same command.
+
+target-version = "py310"
+line-length = 88
+exclude = [
+    "skills/animated-sticker-maker/scripts/__pycache__",
+    ".venv",
+]
+
+[lint]
+# Deliberate, version-stable rule set (see the "Run `ruff check`" contract in
+# AGENTS.md). E5 line-length and bandit S rules stay out on purpose; the
+# tryceratops TRY family is excluded because this codebase deliberately uses
+# `raise ValueError(...)` as its validation language.
+select = [
+    "E4",   # pycodestyle imports
+    "E7",   # pycodestyle statements
+    "E9",   # pycodestyle runtime
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "SIM",  # flake8-simplify
+    "RUF",  # ruff-specific
+    "BLE",  # flake8-blind-except
+    "DTZ",  # flake8-datetimez
+    "EXE",  # flake8-executable
+]
+ignore = [
+    # Non-ASCII is intentional in the localized Review Page strings (Chinese
+    # punctuation, multiplication sign in size labels).
+    "RUF001",
+    "RUF002",
+    "RUF003",
+]

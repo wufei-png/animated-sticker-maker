@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -10,7 +11,6 @@ from pathlib import Path
 
 from PIL import Image
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = REPO_ROOT / "skills" / "animated-sticker-maker" / "scripts"
 if str(SCRIPTS) not in sys.path:
@@ -18,8 +18,8 @@ if str(SCRIPTS) not in sys.path:
 
 from artifact_integrity import (  # noqa: E402
     package_fingerprint,
-    report_artifact_fingerprint,
     render_track_fingerprint,
+    report_artifact_fingerprint,
     sha256_path,
 )
 from media_validation import alpha_metrics  # noqa: E402
@@ -41,6 +41,31 @@ NOTES = {
 
 
 class GoldenWorkflowTests(unittest.TestCase):
+    # One full, visually validated scenario per track is built once for the
+    # whole class. Tests that mutate artifacts copy the shared tree first, so
+    # the expensive packaging and export pipelines run only twice.
+    _shared_root: Path | None = None
+    _shared_keyframes: tuple[Path, Path] | None = None
+    _shared_render: tuple[Path, Path] | None = None
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._shared_root = Path(tempfile.mkdtemp())
+        builder = cls()
+        cls._shared_keyframes = builder.build_passed_scenario(
+            cls._shared_root / "keyframes",
+            "keyframes",
+        )
+        cls._shared_render = builder.build_passed_scenario(
+            cls._shared_root / "render",
+            "render",
+        )
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        if cls._shared_root is not None:
+            shutil.rmtree(cls._shared_root, ignore_errors=True)
+
     def run_cli(
         self,
         script: Path,
@@ -185,6 +210,22 @@ class GoldenWorkflowTests(unittest.TestCase):
         self.doctor("healthy", "report", export_report)
         return package, export_report
 
+    def _shared_scenario(self, track: str) -> tuple[Path, Path]:
+        shared = (
+            self._shared_keyframes if track == "keyframes" else self._shared_render
+        )
+        if shared is None:
+            raise AssertionError(f"shared {track} scenario was not built")
+        return shared
+
+    def _copy_scenario(self, track: str) -> tuple[Path, Path]:
+        source_package, source_report = self._shared_scenario(track)
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        package = Path(temporary.name) / source_package.name
+        shutil.copytree(source_package, package)
+        return package, package / source_report.relative_to(source_package)
+
     def mutate_png(self, path: Path) -> None:
         with Image.open(path) as source:
             image = source.convert("RGBA")
@@ -226,54 +267,42 @@ class GoldenWorkflowTests(unittest.TestCase):
     def test_fixture_motion_and_keyframes_export_end_to_end(self) -> None:
         self.doctor("healthy", "motion", FIXTURE / "motion.json")
         self.doctor("healthy", cwd=FIXTURE)
-        with tempfile.TemporaryDirectory() as temporary:
-            package, export_report = self.build_passed_scenario(
-                Path(temporary),
-                "keyframes",
-            )
-            self.assertTrue((package / "sticker.webp").is_file())
-            self.assertTrue((export_report.parent / "sticker.gif").is_file())
-            self.doctor("healthy", cwd=export_report.parent)
+        package, export_report = self._shared_scenario("keyframes")
+        self.assertTrue((package / "sticker.webp").is_file())
+        self.assertTrue((export_report.parent / "sticker.gif").is_file())
+        self.doctor("healthy", cwd=export_report.parent)
 
     def test_render_track_export_end_to_end(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            package, export_report = self.build_passed_scenario(
-                Path(temporary),
-                "render",
-            )
-            report = json.loads(export_report.read_text(encoding="utf-8"))
-            self.assertEqual(report["frame_track"], "render")
-            self.assertEqual(report["gif"]["selected_fps"], 5)
-            self.assertTrue(
-                (package / "validation" / "render-report.json").is_file()
-            )
+        package, export_report = self._shared_scenario("render")
+        report = json.loads(export_report.read_text(encoding="utf-8"))
+        self.assertEqual(report["frame_track"], "render")
+        self.assertEqual(report["gif"]["selected_fps"], 5)
+        self.assertTrue(
+            (package / "validation" / "render-report.json").is_file()
+        )
 
     def test_export_doctor_rejects_tampered_evidence_and_constraints(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            _, export_report = self.build_passed_scenario(
-                Path(temporary),
-                "keyframes",
-            )
-            original = json.loads(export_report.read_text(encoding="utf-8"))
-            mutations = {
-                "technical-evidence": lambda report: report[
-                    "technical_validation"
-                ].__setitem__("checks", {"placeholder": True}),
-                "provenance-and-limit": lambda report: (
-                    report.pop("spec_url"),
-                    report.__setitem__("verified_on", "2999-01-01"),
-                    report["gif"].__setitem__("max_bytes", 1),
-                ),
-            }
-            for name, mutate in mutations.items():
-                with self.subTest(name=name):
-                    report = json.loads(json.dumps(original))
-                    mutate(report)
-                    export_report.write_text(
-                        json.dumps(report),
-                        encoding="utf-8",
-                    )
-                    self.doctor("invalid", "export", export_report)
+        _, export_report = self._copy_scenario("keyframes")
+        original = json.loads(export_report.read_text(encoding="utf-8"))
+        mutations = {
+            "technical-evidence": lambda report: report[
+                "technical_validation"
+            ].__setitem__("checks", {"placeholder": True}),
+            "provenance-and-limit": lambda report: (
+                report.pop("spec_url"),
+                report.__setitem__("verified_on", "2999-01-01"),
+                report["gif"].__setitem__("max_bytes", 1),
+            ),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                report = json.loads(json.dumps(original))
+                mutate(report)
+                export_report.write_text(
+                    json.dumps(report),
+                    encoding="utf-8",
+                )
+                self.doctor("invalid", "export", export_report)
 
     def test_export_doctor_revalidates_upstream_report_evidence(self) -> None:
         cases = (
@@ -281,11 +310,8 @@ class GoldenWorkflowTests(unittest.TestCase):
             ("render", "validation/render-report.json", "track_report"),
         )
         for track, relative_report, binding_key in cases:
-            with self.subTest(track=track), tempfile.TemporaryDirectory() as temporary:
-                package, export_report = self.build_passed_scenario(
-                    Path(temporary),
-                    track,
-                )
+            with self.subTest(track=track):
+                package, export_report = self._copy_scenario(track)
                 upstream_report = package / relative_report
                 upstream = json.loads(upstream_report.read_text(encoding="utf-8"))
                 upstream["technical_validation"]["checks"] = {
@@ -324,11 +350,8 @@ class GoldenWorkflowTests(unittest.TestCase):
             ),
         )
         for track, frame_relative, report_relative, binding_key, fingerprint in cases:
-            with self.subTest(track=track), tempfile.TemporaryDirectory() as temporary:
-                package, export_report = self.build_passed_scenario(
-                    Path(temporary),
-                    track,
-                )
+            with self.subTest(track=track):
+                package, export_report = self._copy_scenario(track)
                 frame_path = package / frame_relative
                 blank = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
                 blank.save(frame_path, format="PNG")
@@ -360,36 +383,29 @@ class GoldenWorkflowTests(unittest.TestCase):
             "blank": Image.new("RGBA", (32, 32), (0, 0, 0, 0)),
             "opaque-border": Image.new("RGBA", (32, 32), (220, 30, 30, 255)),
         }
-        with tempfile.TemporaryDirectory() as temporary:
-            _, export_report = self.build_passed_scenario(
-                Path(temporary),
-                "keyframes",
-            )
-            original = json.loads(export_report.read_text(encoding="utf-8"))
-            preview_path = export_report.parent / "preview.png"
-            for name, image in variants.items():
-                with self.subTest(name=name):
-                    image.save(preview_path, format="PNG")
-                    report = json.loads(json.dumps(original))
-                    preview = report["preview"]
-                    assert isinstance(preview, dict)
-                    preview["bytes"] = preview_path.stat().st_size
-                    preview["sha256"] = sha256_path(preview_path)
-                    self.refresh_export_artifacts(export_report, report)
-                    export_report.write_text(
-                        json.dumps(report),
-                        encoding="utf-8",
-                    )
+        _, export_report = self._copy_scenario("keyframes")
+        original = json.loads(export_report.read_text(encoding="utf-8"))
+        preview_path = export_report.parent / "preview.png"
+        for name, image in variants.items():
+            with self.subTest(name=name):
+                image.save(preview_path, format="PNG")
+                report = json.loads(json.dumps(original))
+                preview = report["preview"]
+                assert isinstance(preview, dict)
+                preview["bytes"] = preview_path.stat().st_size
+                preview["sha256"] = sha256_path(preview_path)
+                self.refresh_export_artifacts(export_report, report)
+                export_report.write_text(
+                    json.dumps(report),
+                    encoding="utf-8",
+                )
 
-                    self.doctor("invalid", "export", export_report)
+                self.doctor("invalid", "export", export_report)
 
     def test_keyframe_invalidation_chain(self) -> None:
         for mutation in ("authored-frame", "source-report", "export-gif"):
-            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as temporary:
-                package, export_report = self.build_passed_scenario(
-                    Path(temporary),
-                    "keyframes",
-                )
+            with self.subTest(mutation=mutation):
+                package, export_report = self._copy_scenario("keyframes")
                 if mutation == "authored-frame":
                     self.mutate_png(package / "source" / "frames" / "000.png")
                     self.doctor("invalid", "package", package)
@@ -427,11 +443,8 @@ class GoldenWorkflowTests(unittest.TestCase):
 
     def test_render_invalidation_chain(self) -> None:
         for mutation in ("render-frame", "render-report", "export-gif"):
-            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as temporary:
-                package, export_report = self.build_passed_scenario(
-                    Path(temporary),
-                    "render",
-                )
+            with self.subTest(mutation=mutation):
+                package, export_report = self._copy_scenario("render")
                 if mutation == "render-frame":
                     self.mutate_png(
                         package / "source" / "rendered-frames" / "0000.png"

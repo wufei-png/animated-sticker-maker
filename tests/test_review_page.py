@@ -10,12 +10,14 @@ from pathlib import Path
 
 from PIL import Image
 
-from support import review_page
-from review_template import render_review_html
-
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = REPO_ROOT / "skills" / "animated-sticker-maker" / "scripts"
+if str(SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS))
+
+from review_template import render_review_html  # noqa: E402
+from support import review_page  # noqa: E402
+
 FIXTURE = REPO_ROOT / "tests" / "fixtures" / "golden_workflow"
 PACKAGE_SCRIPT = SCRIPTS / "package_sticker.py"
 VALIDATION_SCRIPT = SCRIPTS / "record_visual_validation.py"

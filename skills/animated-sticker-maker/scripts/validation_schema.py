@@ -1,10 +1,8 @@
-#!/usr/bin/env python3
 """Closed structural contract for current Validation Report schema v1."""
 
 from __future__ import annotations
 
 import re
-
 
 NOTE_FIELDS = ("identity", "meaning", "loop", "alpha", "small_size")
 GIF_CHECK_FIELDS = {

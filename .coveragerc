@@ -1,0 +1,12 @@
+# Coverage measurement for the Skill scripts.
+# Report-only: CI publishes a coverage report but does not fail on a threshold.
+
+[run]
+source = skills/animated-sticker-maker/scripts
+branch = True
+omit =
+    skills/animated-sticker-maker/scripts/__pycache__/*
+
+[report]
+show_missing = True
+skip_covered = True

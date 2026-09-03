@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Remove a flat chroma background from a raster image using Pillow and NumPy."""
 
 from __future__ import annotations

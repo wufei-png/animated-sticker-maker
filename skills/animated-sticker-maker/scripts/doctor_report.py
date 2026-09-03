@@ -1,11 +1,8 @@
-#!/usr/bin/env python3
 """Doctor checks for validation reports and platform export media."""
 
 from __future__ import annotations
 
 from pathlib import Path
-
-from PIL import Image
 
 from artifact_integrity import safe_relative_file, sha256_path
 from doctor_core import Diagnosis, diagnose_report_core, load_json_object
@@ -13,6 +10,7 @@ from doctor_package import diagnose_primary_package, diagnose_render_track
 from gif_export_core import gif_safe_durations
 from media_validation import alpha_metrics, validate_gif
 from motion_schema import validate_motion
+from PIL import Image
 from validation_evidence import gif_encoding_evidence
 
 
@@ -240,7 +238,7 @@ def diagnose_export_media(
                     preview_format = image.format
                     preview_size = image.size
                     preview_metrics = alpha_metrics(image.convert("RGBA"))
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - corrupt preview media must become a diagnosis, not a crash
                 diagnosis.add(
                     "export.preview.media",
                     "error",
@@ -338,8 +336,8 @@ def diagnose_export(path: Path) -> Diagnosis:
     report = None
     try:
         report = load_json_object(path)
-    except Exception:
-        pass
+    except (OSError, ValueError):
+        report = None
     if report is not None:
         diagnosis.boolean(
             "export.scope",

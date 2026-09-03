@@ -1,8 +1,6 @@
-#!/usr/bin/env python3
 """Built-in English and Chinese copy for the offline Review Page."""
 
 from __future__ import annotations
-
 
 SUPPORTED_LANGUAGES = {"en", "zh"}
 

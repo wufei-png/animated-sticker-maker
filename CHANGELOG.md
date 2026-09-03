@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- Add a pinned ruff rule set and a CI lint gate; clean up all outstanding lint violations in scripts and tests.
+- Make validated-on date comparisons timezone-explicit, scope doctor diagnostics to precise exceptions, and drop non-executable shebangs from the scripts.
+- Add a report-only coverage report to CI and document the local coverage command in the repository contract.
+- Speed up the golden workflow suite by sharing one fully validated scenario per track instead of rebuilding it per test.
+- Extend the CI test matrix to Python 3.14 and enforce `git diff --check` in CI.
+
 ## [0.9.0] - 2026-07-17
 
 - Require the complete motion schema v2 contract and reject older schema versions.

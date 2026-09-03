@@ -1,11 +1,9 @@
-#!/usr/bin/env python3
 """Validate the portable motion-plan contract shared by package tools."""
 
 from __future__ import annotations
 
 import re
 from pathlib import Path
-
 
 SCHEMA_VERSION = 2
 MAX_RENDER_FRAMES = 240

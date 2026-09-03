@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Shared deterministic media inspection for packages, exports, and doctor."""
 
 from __future__ import annotations

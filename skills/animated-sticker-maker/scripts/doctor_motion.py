@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Doctor checks for one working or packaged motion plan."""
 
 from __future__ import annotations

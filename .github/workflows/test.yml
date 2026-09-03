@@ -60,6 +60,8 @@ jobs:
             pillow: "Pillow>=12,<13"
           - python: "3.13"
             pillow: "Pillow>=12,<13"
+          - python: "3.14"
+            pillow: "Pillow>=12,<13"
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
@@ -69,7 +71,19 @@ jobs:
           cache-dependency-path: skills/animated-sticker-maker/requirements.txt
       - name: Install dependencies
         run: python -m pip install "${{ matrix.pillow }}" "numpy>=1.24"
+      - name: Lint (ruff)
+        if: matrix.python == '3.12'
+        run: python -m pip install ruff && ruff check .
       - name: Compile scripts
         run: python -m py_compile skills/animated-sticker-maker/scripts/*.py
       - name: Run tests
+        if: matrix.python != '3.12'
         run: python -m unittest discover -s tests -v
+      - name: Run tests with coverage report
+        if: matrix.python == '3.12'
+        run: |
+          python -m pip install coverage
+          coverage run -m unittest discover -s tests -v
+          coverage report -m
+      - name: Check for whitespace errors
+        run: git diff --check

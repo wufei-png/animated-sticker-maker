@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Render one offline Review Page from separated HTML, CSS, and JavaScript assets."""
 
 from __future__ import annotations
@@ -7,7 +6,6 @@ import html
 import json
 from functools import lru_cache
 from pathlib import Path
-
 
 ASSET_DIR = Path(__file__).resolve().parent.parent / "assets" / "review-page"
 

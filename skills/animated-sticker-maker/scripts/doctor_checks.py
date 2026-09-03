@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Public Doctor dispatcher for one animated-sticker artifact boundary."""
 
 from __future__ import annotations
@@ -9,7 +8,6 @@ from doctor_core import Diagnosis
 from doctor_motion import diagnose_motion
 from doctor_package import diagnose_package
 from doctor_report import diagnose_export, diagnose_report
-
 
 EXIT_CODES = {"healthy": 0, "invalid": 1, "incomplete": 2}
 

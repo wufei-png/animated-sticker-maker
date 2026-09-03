@@ -1,15 +1,12 @@
-#!/usr/bin/env python3
 """Validate report evidence, state transitions, and upstream dependencies."""
 
 from __future__ import annotations
 
 import json
 import re
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from urllib.parse import urlparse
-
-from PIL import Image
 
 from artifact_integrity import (
     package_fingerprint,
@@ -19,10 +16,11 @@ from artifact_integrity import (
     sha256_path,
 )
 from motion_schema import validate_motion
+from PIL import Image
 from validation_evidence import (
     gif_encoding_evidence,
-    package_webp_alpha_guard_required,
     package_source_evidence,
+    package_webp_alpha_guard_required,
     render_track_evidence,
     validate_export_gif_evidence,
     validate_preview_evidence,
@@ -32,7 +30,6 @@ from validation_schema import (
     NOTE_FIELDS,
     validate_report_contract,
 )
-
 
 REPORT_SCHEMA_VERSION = 1
 PACKAGE_SOURCE_CHECK_IDS = {
@@ -524,7 +521,7 @@ def _validate_export_metadata(
         verified_date = date.fromisoformat(verified_on)
     except ValueError as exc:
         raise ValueError("export report verified_on must be an ISO date") from exc
-    if verified_date > date.today():
+    if verified_date > datetime.now().astimezone().date():
         raise ValueError("export report verified_on cannot be in the future")
     if verified_on != verified_date.isoformat():
         raise ValueError("export report verified_on must use YYYY-MM-DD form")

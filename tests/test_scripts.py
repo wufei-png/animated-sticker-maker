@@ -5,16 +5,16 @@ import json
 import sys
 import tempfile
 import unittest
-from datetime import date, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from unittest import mock
 
 from PIL import Image, features
-
 from support import (
     artifact_integrity,
     export_platform_gif,
     frame_metrics,
+    gif_export_core,
     make_frame,
     media_validation,
     motion_plan,
@@ -529,12 +529,11 @@ class PackageStickerTests(unittest.TestCase):
                 package_sticker,
                 "validate_report_binding",
                 side_effect=ValueError("candidate report rejected"),
+            ), self.assertRaisesRegex(
+                ValueError,
+                "candidate report rejected",
             ):
-                with self.assertRaisesRegex(
-                    ValueError,
-                    "candidate report rejected",
-                ):
-                    package_sticker.package(args)
+                package_sticker.package(args)
 
             self.assertEqual((output / "sticker.webp").read_bytes(), original)
 
@@ -798,9 +797,11 @@ class PackageStickerTests(unittest.TestCase):
                 allow_nonstandard_timing=False,
             )
             budget_globals = package_sticker.validate_render_pixel_budget.__globals__
-            with mock.patch.dict(budget_globals, {"MAX_RENDER_PIXELS": 600}):
-                with self.assertRaisesRegex(ValueError, "64M aggregate"):
-                    package_sticker.package(args)
+            with (
+                mock.patch.dict(budget_globals, {"MAX_RENDER_PIXELS": 600}),
+                self.assertRaisesRegex(ValueError, "64M aggregate"),
+            ):
+                package_sticker.package(args)
 
     @unittest.skipUnless(features.check("webp"), "Pillow has no WebP support")
     def test_packaged_png_is_real_png_even_when_input_is_webp(self) -> None:
@@ -1036,14 +1037,16 @@ class ExportPlatformGifTests(unittest.TestCase):
 
     def test_report_schema_version_requires_an_integer(self) -> None:
         for schema_version in (True, 1.0):
-            with self.subTest(schema_version=schema_version):
-                with self.assertRaisesRegex(
+            with (
+                self.subTest(schema_version=schema_version),
+                self.assertRaisesRegex(
                     ValueError,
                     "report.schema_version must be 1",
-                ):
-                    validation_integrity.validate_report_schema(
-                        {"schema_version": schema_version}
-                    )
+                ),
+            ):
+                validation_integrity.validate_report_schema(
+                    {"schema_version": schema_version}
+                )
 
     def test_nested_pass_without_successful_checks_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -1144,7 +1147,7 @@ class ExportPlatformGifTests(unittest.TestCase):
 
     def test_resample_timeline_preserves_duration_and_semantic_order(self) -> None:
         frames = [Image.new("RGBA", (2, 2), (value, 0, 0, 255)) for value in (1, 2, 3)]
-        sampled, durations = export_platform_gif.resample_timeline(
+        sampled, durations = gif_export_core.resample_timeline(
             frames, [100, 300, 600], fps=5
         )
         self.assertEqual([frame.getpixel((0, 0))[0] for frame in sampled], [1, 2, 3, 3, 3])
@@ -1186,7 +1189,7 @@ class ExportPlatformGifTests(unittest.TestCase):
             Image.new("RGBA", (64, 64), (index, 80, 70, 255))
             for index in range(48)
         ]
-        samples = export_platform_gif.collect_palette_samples(
+        samples = gif_export_core.collect_palette_samples(
             frames,
             alpha_threshold=96,
             max_samples=500,
@@ -1249,12 +1252,12 @@ class ExportPlatformGifTests(unittest.TestCase):
         with self.assertRaises(argparse.ArgumentTypeError):
             export_platform_gif.parse_spec_url("file:///tmp/spec.html")
         self.assertEqual(
-            export_platform_gif.parse_verified_on(date.today().isoformat()),
-            date.today().isoformat(),
+            export_platform_gif.parse_verified_on(datetime.now().astimezone().date().isoformat()),
+            datetime.now().astimezone().date().isoformat(),
         )
         with self.assertRaises(argparse.ArgumentTypeError):
             export_platform_gif.parse_verified_on(
-                (date.today() + timedelta(days=1)).isoformat()
+                (datetime.now().astimezone().date() + timedelta(days=1)).isoformat()
             )
 
     def test_unvalidated_diagnostic_cannot_be_deliverable(self) -> None:
@@ -1442,7 +1445,7 @@ class ExportPlatformGifTests(unittest.TestCase):
                 "--spec-url",
                 "https://example.com/official-spec",
                 "--verified-on",
-                date.today().isoformat(),
+                datetime.now().astimezone().date().isoformat(),
             ]
             with mock.patch.object(sys, "argv", argv):
                 export_platform_gif.main()
@@ -1472,7 +1475,7 @@ class ExportPlatformGifTests(unittest.TestCase):
                 "--spec-url",
                 "https://example.com/official-spec",
                 "--verified-on",
-                date.today().isoformat(),
+                datetime.now().astimezone().date().isoformat(),
             ]
             with mock.patch.object(sys, "argv", argv):
                 export_platform_gif.main()
@@ -1513,7 +1516,7 @@ class ExportPlatformGifTests(unittest.TestCase):
                 "--spec-url",
                 "https://example.com/official-spec",
                 "--verified-on",
-                date.today().isoformat(),
+                datetime.now().astimezone().date().isoformat(),
             ]
             with mock.patch.object(sys, "argv", argv):
                 export_platform_gif.main()
@@ -1551,7 +1554,7 @@ class ExportPlatformGifTests(unittest.TestCase):
                 "--spec-url",
                 "https://example.com/official-spec",
                 "--verified-on",
-                date.today().isoformat(),
+                datetime.now().astimezone().date().isoformat(),
             ]
             with mock.patch.object(sys, "argv", base_argv):
                 export_platform_gif.main()
@@ -1573,9 +1576,8 @@ class ExportPlatformGifTests(unittest.TestCase):
                 sys,
                 "argv",
                 [*base_argv, "--max-bytes", "1"],
-            ):
-                with self.assertRaisesRegex(ValueError, "cannot meet 1 bytes"):
-                    export_platform_gif.main()
+            ), self.assertRaisesRegex(ValueError, "cannot meet 1 bytes"):
+                export_platform_gif.main()
 
             self.assertEqual(
                 {name: path.read_bytes() for name, path in paths.items()},
@@ -1596,7 +1598,7 @@ class ExportPlatformGifTests(unittest.TestCase):
                 "--spec-url",
                 "https://example.com/official-spec",
                 "--verified-on",
-                date.today().isoformat(),
+                datetime.now().astimezone().date().isoformat(),
             ]
             with mock.patch.object(
                 sys,
@@ -1635,7 +1637,7 @@ class ExportPlatformGifTests(unittest.TestCase):
                 "--spec-url",
                 "https://example.com/official-spec",
                 "--verified-on",
-                date.today().isoformat(),
+                datetime.now().astimezone().date().isoformat(),
             ]
             with mock.patch.object(
                 sys,
@@ -1733,7 +1735,7 @@ class ExportPlatformGifTests(unittest.TestCase):
                 "--spec-url",
                 "https://example.com/official-spec",
                 "--verified-on",
-                date.today().isoformat(),
+                datetime.now().astimezone().date().isoformat(),
             ]
             with mock.patch.object(sys, "argv", argv):
                 export_platform_gif.main()
@@ -1770,7 +1772,7 @@ class ExportPlatformGifTests(unittest.TestCase):
                 "--spec-url",
                 "https://example.com/official-spec",
                 "--verified-on",
-                date.today().isoformat(),
+                datetime.now().astimezone().date().isoformat(),
             ]
             with mock.patch.object(sys, "argv", argv):
                 export_platform_gif.main()
@@ -1824,7 +1826,7 @@ class ExportPlatformGifTests(unittest.TestCase):
         ]
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "once.gif"
-            export_platform_gif.write_gif(
+            gif_export_core.write_gif(
                 frames,
                 [100, 100],
                 path,
@@ -1855,7 +1857,7 @@ class ExportPlatformGifTests(unittest.TestCase):
                 self.assertEqual(image.format, "WEBP")
                 self.assertEqual(image.n_frames, 2)
             self.assertEqual(
-                package_sticker.webp_animation_durations(path),
+                media_validation.webp_animation_durations(path),
                 [123, 456],
             )
 

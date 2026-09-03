@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Record visual validation notes for the exact artifacts in a report."""
 
 from __future__ import annotations

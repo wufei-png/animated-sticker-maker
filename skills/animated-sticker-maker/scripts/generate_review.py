@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Generate one read-only HTML review page for one validation report."""
 
 from __future__ import annotations

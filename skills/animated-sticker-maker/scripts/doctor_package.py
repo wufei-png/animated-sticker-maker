@@ -1,16 +1,14 @@
-#!/usr/bin/env python3
 """Doctor checks for package source and optional render-track artifacts."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from PIL import Image
-
 from artifact_integrity import safe_relative_file, sha256_path
 from doctor_core import Diagnosis, diagnose_report_core, load_json_object
 from media_validation import alpha_metrics, validate_sticker_webp
 from motion_schema import validate_motion, validate_render_pixel_budget
+from PIL import Image
 
 
 def inspect_frame_set(
@@ -46,7 +44,7 @@ def inspect_frame_set(
                 source_size = source.size
                 aggregate_pixels += source.width * source.height
                 rgba = source.convert("RGBA")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - corrupt media must become a diagnosis, not a crash
             diagnosis.add(
                 f"{prefix}.{index}.readable",
                 "error",

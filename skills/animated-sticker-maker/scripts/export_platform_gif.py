@@ -1,13 +1,13 @@
-#!/usr/bin/env python3
 """Export a validated sticker package as a constrained GIF and preview PNG."""
 
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import re
 import tempfile
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -24,12 +24,8 @@ from export_transaction import (
 )
 from gif_export_core import (
     RESAMPLING_FILTERS,
-    collect_palette_samples,
     export_gif,
     fit_frame,
-    gif_safe_durations,
-    resample_timeline,
-    write_gif,
     write_preview,
 )
 from media_validation import validate_gif
@@ -39,7 +35,6 @@ from validation_integrity import (
     validate_report_state,
 )
 from validation_schema import validate_report_contract
-
 
 PLATFORM_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 
@@ -70,7 +65,7 @@ def parse_fps_candidates(value: str) -> tuple[int, ...]:
         )
     if len(set(candidates)) != len(candidates):
         raise argparse.ArgumentTypeError("fps candidates must not contain duplicates")
-    if any(left <= right for left, right in zip(candidates, candidates[1:])):
+    if any(left <= right for left, right in itertools.pairwise(candidates)):
         raise argparse.ArgumentTypeError(
             "fps candidates must be ordered from highest to lowest"
         )
@@ -101,7 +96,7 @@ def parse_verified_on(value: str) -> str:
         raise argparse.ArgumentTypeError(
             "verified-on must be an ISO date in YYYY-MM-DD form"
         ) from exc
-    if verified > date.today():
+    if verified > datetime.now().astimezone().date():
         raise argparse.ArgumentTypeError("verified-on cannot be in the future")
     return verified.isoformat()
 

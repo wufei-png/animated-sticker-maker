@@ -6,7 +6,6 @@ from pathlib import Path
 
 from PIL import Image
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SKILL_DIR = REPO_ROOT / "skills" / "animated-sticker-maker"
 SCRIPTS_DIR = SKILL_DIR / "scripts"
@@ -32,6 +31,7 @@ chroma_key = load_script("chroma_key")
 motion_schema = load_script("motion_schema")
 doctor = load_script("doctor_checks")
 review_page = load_script("review_page")
+gif_export_core = sys.modules["gif_export_core"]
 validation_integrity = sys.modules["validation_integrity"]
 media_validation = sys.modules["media_validation"]
 atomic_io = sys.modules["atomic_io"]

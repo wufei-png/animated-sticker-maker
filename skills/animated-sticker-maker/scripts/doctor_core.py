@@ -1,15 +1,14 @@
-#!/usr/bin/env python3
 """Shared result model and report-state checks for Doctor."""
 
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Callable, TypeVar
+from typing import TypeVar
 
 from validation_integrity import validate_report_binding, validate_report_state
-
 
 JSON_SCHEMA_VERSION = 1
 T = TypeVar("T")
@@ -70,7 +69,7 @@ class Diagnosis:
     ) -> T | None:
         try:
             value = action()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - the doctor must convert any artifact failure into a diagnosis, never crash
             self.add(check_id, "error", str(exc), path)
             return None
         self.add(check_id, "pass", success, path)

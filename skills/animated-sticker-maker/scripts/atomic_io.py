@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Small atomic filesystem writes shared by runtime commands."""
 
 from __future__ import annotations

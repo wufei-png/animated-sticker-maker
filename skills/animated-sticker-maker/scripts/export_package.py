@@ -1,12 +1,9 @@
-#!/usr/bin/env python3
 """Load validated package frame tracks and derive export previews."""
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
-
-from PIL import Image
 
 from artifact_integrity import (
     package_fingerprint,
@@ -15,6 +12,7 @@ from artifact_integrity import (
 )
 from gif_export_core import fit_frame
 from motion_schema import is_positive_int, validate_motion
+from PIL import Image
 from validation_integrity import (
     validate_report_binding,
     validate_report_state,

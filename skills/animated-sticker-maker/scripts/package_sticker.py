@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Validate RGBA frames and build the default animated-sticker package."""
 
 from __future__ import annotations
@@ -12,8 +11,6 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
-
 from artifact_integrity import (
     package_fingerprint,
     render_track_fingerprint,
@@ -23,15 +20,14 @@ from media_validation import (
     alpha_metrics,
     validate_sticker_webp,
     webp_alpha_guard_required,
-    webp_animation_durations,
 )
 from motion_schema import validate_motion, validate_render_pixel_budget
+from PIL import Image, ImageDraw, ImageFont
 from validation_integrity import (
     REPORT_SCHEMA_VERSION,
     validate_report_binding,
     validate_report_state,
 )
-
 
 DEFAULT_SIZE = (1024, 1024)
 DEFAULT_FRAME_RANGE = (4, 8)

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Compute stable fingerprints for packaged source and validation artifacts."""
 
 from __future__ import annotations
@@ -114,7 +113,7 @@ def render_track_fingerprint(package: Path) -> str:
             path_value,
             f"render.frames[{index}].file",
         )
-        digest.update(f"render-frame:{path_value}".encode("utf-8"))
+        digest.update(f"render-frame:{path_value}".encode())
         digest.update(b"\0")
         digest.update(path.read_bytes())
         digest.update(b"\0")

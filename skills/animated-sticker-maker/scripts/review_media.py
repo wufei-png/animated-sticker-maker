@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Resolve and decode media used by the offline Review Page model."""
 
 from __future__ import annotations
@@ -9,10 +8,9 @@ from io import BytesIO
 from pathlib import Path
 from urllib.parse import quote
 
-from PIL import Image
-
 from artifact_integrity import safe_relative_file
 from media_validation import webp_animation_durations
+from PIL import Image
 
 
 def relative_media_url(path: Path, output_dir: Path) -> str:

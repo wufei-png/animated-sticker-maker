@@ -1,11 +1,8 @@
-#!/usr/bin/env python3
 """Recompute objective validation evidence from current media artifacts."""
 
 from __future__ import annotations
 
 from pathlib import Path
-
-from PIL import Image
 
 from artifact_integrity import safe_relative_file, sha256_path
 from gif_export_core import gif_safe_durations
@@ -15,7 +12,7 @@ from media_validation import (
     validate_sticker_webp,
     webp_alpha_guard_required,
 )
-
+from PIL import Image
 
 DEFAULT_FRAME_RANGE = (4, 8)
 DEFAULT_DURATION_RANGE_MS = (1200, 2000)

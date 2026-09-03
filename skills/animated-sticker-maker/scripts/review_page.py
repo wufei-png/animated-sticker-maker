@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Build the data model and HTML for one exact visual-validation boundary."""
 
 from __future__ import annotations
@@ -7,11 +6,10 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from PIL import Image
-
 from artifact_integrity import safe_relative_file, sha256_path
 from atomic_io import atomic_write_text
 from motion_schema import validate_motion
+from PIL import Image
 from review_i18n import language_text
 from review_media import (
     encoded_frame_records,
@@ -21,7 +19,6 @@ from review_media import (
 )
 from review_template import render_review_html
 from validation_integrity import validate_report_binding, validate_report_state
-
 
 SUPPORTED_SCOPES = {"package_source", "render_track", "export_files"}
 REVIEW_FIELDS = ("identity", "meaning", "loop", "alpha", "small_size")

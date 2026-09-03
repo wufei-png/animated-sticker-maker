@@ -9,12 +9,11 @@ from pathlib import Path
 from unittest import mock
 
 from PIL import Image
-
 from support import (
-    atomic_io,
     artifact_integrity,
-    export_platform_gif,
+    atomic_io,
     frame_metrics,
+    gif_export_core,
     make_frame,
     media_validation,
     packaged_motion,
@@ -128,7 +127,7 @@ class RecordVisualValidationTests(unittest.TestCase):
         for frame_path in (frames_dir / "000.png", frames_dir / "001.png"):
             with Image.open(frame_path) as image:
                 export_frames.append(image.convert("RGBA"))
-        export_platform_gif.write_gif(
+        gif_export_core.write_gif(
             export_frames,
             [600, 600],
             artifact,

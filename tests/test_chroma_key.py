@@ -7,7 +7,6 @@ from pathlib import Path
 from unittest import mock
 
 from PIL import Image
-
 from support import chroma_key
 
 

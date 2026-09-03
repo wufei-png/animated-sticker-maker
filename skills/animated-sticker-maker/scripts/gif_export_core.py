@@ -1,14 +1,13 @@
-#!/usr/bin/env python3
 """Deterministic frame fitting, GIF timing, palette, and preview operations."""
 
 from __future__ import annotations
 
 import bisect
+import itertools
 from pathlib import Path
 
 import numpy as np
 from PIL import Image
-
 
 COLOR_CANDIDATES = (255, 224, 192, 160, 128, 96, 64, 48, 32)
 MAX_PALETTE_SAMPLES = 500_000
@@ -142,7 +141,7 @@ def gif_safe_durations(total_ms: int, frame_count: int) -> list[int]:
         round((index * rounded_total / frame_count) / 10) * 10
         for index in range(frame_count + 1)
     ]
-    durations = [end - start for start, end in zip(boundaries, boundaries[1:])]
+    durations = [end - start for start, end in itertools.pairwise(boundaries)]
     if any(duration <= 0 for duration in durations):
         raise ValueError("requested fps is too high for GIF's 10 ms timing precision")
     return durations
