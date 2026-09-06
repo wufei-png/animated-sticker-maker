@@ -71,6 +71,17 @@ An export report derives its artifact fingerprint directly from the declared `gi
 
 Run `scripts/record_visual_validation.py` against `validation/report.json`, an optional render-track report, and each export report:
 
+```bash
+python <skill-dir>/scripts/record_visual_validation.py <report.json> \
+  --status pass \
+  --identity "..." \
+  --meaning "..." \
+  --loop "..." \
+  --alpha "..." \
+  --small-size "..."
+```
+
+- Use `--status fail` when any visual criterion is rejected.
 - Set `visual_validation.status` to `pass` or `fail`.
 - Add concise notes for identity, meaning, loop, Alpha, and small-size checks.
 - Set `deliverable_ready` to true only when both `technical_validation` and `visual_validation` pass.
