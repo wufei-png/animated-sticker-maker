@@ -16,6 +16,7 @@ SCRIPTS = REPO_ROOT / "skills" / "animated-sticker-maker" / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
+import doctor_checks  # noqa: E402
 from artifact_integrity import (  # noqa: E402
     package_fingerprint,
     render_track_fingerprint,
@@ -278,6 +279,60 @@ class GoldenWorkflowTests(unittest.TestCase):
         self.assertTrue(
             (package / "validation" / "render-report.json").is_file()
         )
+
+    def test_direct_doctor_rechecks_shared_render_boundaries(self) -> None:
+        package, export_report = self._copy_scenario("render")
+        cases = (
+            ("package", package),
+            ("report", package / "validation" / "report.json"),
+            ("report", package / "validation" / "render-report.json"),
+            ("export", export_report),
+        )
+        for kind, path in cases:
+            with self.subTest(kind=kind, path=path.name):
+                result = doctor_checks.diagnose(kind, path).result()
+                self.assertEqual(result["status"], "healthy")
+                self.assertTrue(result["checks"])
+
+        human = self.run_cli(DOCTOR_SCRIPT, "package", package)
+        self.assertEqual(human.returncode, 0)
+        self.assertIn("doctor: healthy package", human.stdout)
+
+    def test_direct_doctor_reports_pending_render_validation(self) -> None:
+        package, _ = self._copy_scenario("keyframes")
+
+        result = doctor_checks.diagnose("package", package).result()
+
+        self.assertEqual(result["status"], "incomplete")
+        self.assertTrue(
+            any(
+                check["id"] == "render.report.visual"
+                and check["status"] == "warning"
+                for check in result["warnings"]
+            )
+        )
+
+    def test_direct_doctor_reports_stale_package_binding(self) -> None:
+        package, _ = self._copy_scenario("keyframes")
+        self.mutate_png(package / "source" / "frames" / "000.png")
+
+        result = doctor_checks.diagnose("package", package).result()
+        error_ids = {check["id"] for check in result["errors"]}
+
+        self.assertEqual(result["status"], "invalid")
+        self.assertIn("package.report.binding", error_ids)
+        self.assertIn("package.report.frame-evidence", error_ids)
+
+    def test_direct_doctor_reports_corrupt_export_media(self) -> None:
+        _, export_report = self._copy_scenario("keyframes")
+        (export_report.parent / "sticker.gif").write_bytes(b"not-a-gif")
+
+        result = doctor_checks.diagnose("export", export_report).result()
+        error_ids = {check["id"] for check in result["errors"]}
+
+        self.assertEqual(result["status"], "invalid")
+        self.assertIn("report.binding", error_ids)
+        self.assertIn("export.gif.media", error_ids)
 
     def test_export_doctor_rejects_tampered_evidence_and_constraints(self) -> None:
         _, export_report = self._copy_scenario("keyframes")

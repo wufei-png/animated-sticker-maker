@@ -220,12 +220,14 @@ class ReviewPageTests(unittest.TestCase):
             report = package / "validation" / "report.json"
             output = report.with_name("report.review.html")
 
-            self.require_success(
+            result = self.require_success(
                 REVIEW_SCRIPT,
                 report,
                 "--reference-image",
                 FIXTURE / "reference.png",
             )
+            self.assertIn("Wrote ", result.stdout)
+            self.assertTrue(output.is_file())
             model = review_page.build_review_model(
                 report,
                 reference_image=FIXTURE / "reference.png",
