@@ -26,6 +26,9 @@ select = [
     "DTZ",  # flake8-datetimez
     "EXE",  # flake8-executable
 ]
+# Targeted follow-up rules: B905 (explicit zip strictness) and C420 (needless
+# dict comprehension) beyond the stable base selection above.
+extend-select = ["B", "C4"]
 ignore = [
     # Non-ASCII is intentional in the localized Review Page strings (Chinese
     # punctuation, multiplication sign in size labels).

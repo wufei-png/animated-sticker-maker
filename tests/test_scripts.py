@@ -54,7 +54,7 @@ class PackageStickerTests(unittest.TestCase):
                 (60, 120, 110, 255),
                 (80, 140, 130, 255),
             ]
-            for name, color in zip(names, colors):
+            for name, color in zip(names, colors, strict=True):
                 make_frame(frames_dir / name, color)
 
             motion_path = root / "motion.json"

@@ -151,7 +151,7 @@ def validate_gif(
         frame_count_matches = 1 < encoded_frame_count <= frame_count
     durations_preserved = len(actual_durations) == len(durations) and all(
         isinstance(actual, int) and abs(actual - expected) <= 10
-        for actual, expected in zip(actual_durations, durations)
+        for actual, expected in zip(actual_durations, durations, strict=True)
     )
     if allow_frame_collapse:
         durations_preserved = (

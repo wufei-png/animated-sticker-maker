@@ -310,7 +310,9 @@ def build_candidate(args: argparse.Namespace) -> int:
         "sha256": reference["sha256"],
         "included_path": reference["included_path"],
     }
-    for index, (frame, entry) in enumerate(zip(frames, packaged_motion["frames"])):
+    for index, (frame, entry) in enumerate(
+        zip(frames, packaged_motion["frames"], strict=True)
+    ):
         normalized_name = f"{index:03d}.png"
         frame.save(frame_output / normalized_name, format="PNG")
         canonical_name = f"frames/{normalized_name}"

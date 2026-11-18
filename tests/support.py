@@ -49,15 +49,15 @@ def passing_package_checks(*, render: bool = False) -> dict[str, bool]:
     )
     if render:
         check_ids = check_ids | {"render_track_technical_validation_pass"}
-    return {check_id: True for check_id in check_ids}
+    return dict.fromkeys(check_ids, True)
 
 
 def passing_render_checks() -> dict[str, bool]:
-    return {check_id: True for check_id in validation_integrity.RENDER_TRACK_CHECK_IDS}
+    return dict.fromkeys(validation_integrity.RENDER_TRACK_CHECK_IDS, True)
 
 
 def passing_export_checks() -> dict[str, bool]:
-    return {check_id: True for check_id in validation_integrity.EXPORT_GIF_CHECK_IDS}
+    return dict.fromkeys(validation_integrity.EXPORT_GIF_CHECK_IDS, True)
 
 
 def make_frame(path: Path, color: tuple[int, int, int, int], size: int = 16) -> None:

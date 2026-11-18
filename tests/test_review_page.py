@@ -200,7 +200,7 @@ class ReviewPageTests(unittest.TestCase):
                 "render_track",
                 "export_files",
             )
-            for report, scope in zip(reports, expected_scopes):
+            for report, scope in zip(reports, expected_scopes, strict=True):
                 output = report.with_name(f"{report.stem}.review.html")
                 html = output.read_text(encoding="utf-8")
                 self.assertIn("Animation inspection light table", html)
