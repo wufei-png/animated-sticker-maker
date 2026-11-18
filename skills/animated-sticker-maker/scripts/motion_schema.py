@@ -62,7 +62,9 @@ def validate_render_pixel_budget(aggregate_pixels: int) -> int:
     if not is_positive_int(aggregate_pixels):
         raise ValueError("render aggregate input pixels must be a positive integer")
     if aggregate_pixels > MAX_RENDER_PIXELS:
-        raise ValueError("motion.render.frames exceed the 64M aggregate input-pixel limit")
+        raise ValueError(
+            "motion.render.frames exceed the 64M aggregate input-pixel limit"
+        )
     return aggregate_pixels
 
 
@@ -81,11 +83,17 @@ def validate_motion(motion: object, *, packaged: bool) -> dict[str, object]:
             )
         reference = motion.get("reference")
         if not isinstance(reference, dict):
-            raise ValueError("motion.reference must be an object in a packaged motion plan")
+            raise ValueError(
+                "motion.reference must be an object in a packaged motion plan"
+            )
         require_nonempty_string(reference.get("filename"), "motion.reference.filename")
-        sha256 = require_nonempty_string(reference.get("sha256"), "motion.reference.sha256")
+        sha256 = require_nonempty_string(
+            reference.get("sha256"), "motion.reference.sha256"
+        )
         if not re.fullmatch(r"[0-9a-f]{64}", sha256):
-            raise ValueError("motion.reference.sha256 must be a lowercase SHA-256 digest")
+            raise ValueError(
+                "motion.reference.sha256 must be a lowercase SHA-256 digest"
+            )
         included_path = reference.get("included_path")
         if included_path is not None:
             validate_relative_path(included_path, "motion.reference.included_path")
@@ -111,15 +119,23 @@ def validate_motion(motion: object, *, packaged: bool) -> dict[str, object]:
     identity_lock = motion.get("identity_lock")
     if not isinstance(identity_lock, dict):
         raise ValueError("motion.identity_lock must be an object")
-    require_nonempty_string(identity_lock.get("subject"), "motion.identity_lock.subject")
-    validate_string_list(identity_lock.get("fixed"), "motion.identity_lock.fixed", nonempty=True)
+    require_nonempty_string(
+        identity_lock.get("subject"), "motion.identity_lock.subject"
+    )
+    validate_string_list(
+        identity_lock.get("fixed"), "motion.identity_lock.fixed", nonempty=True
+    )
     validate_string_list(identity_lock.get("flexible"), "motion.identity_lock.flexible")
-    validate_string_list(identity_lock.get("forbidden"), "motion.identity_lock.forbidden")
+    validate_string_list(
+        identity_lock.get("forbidden"), "motion.identity_lock.forbidden"
+    )
 
     generation_plan = motion.get("generation_plan")
     if not isinstance(generation_plan, dict):
         raise ValueError("motion.generation_plan must be an object")
-    validate_string_list(generation_plan.get("anchors"), "motion.generation_plan.anchors")
+    validate_string_list(
+        generation_plan.get("anchors"), "motion.generation_plan.anchors"
+    )
     validate_string_list(
         generation_plan.get("deterministic"),
         "motion.generation_plan.deterministic",
@@ -138,15 +154,21 @@ def validate_motion(motion: object, *, packaged: bool) -> dict[str, object]:
         raise ValueError("motion.transparency.work_color must be present")
     if strategy == "existing-alpha":
         if work_color is not None:
-            raise ValueError("motion.transparency.work_color must be null for existing-alpha")
-    elif not isinstance(work_color, str) or not WORK_COLOR_PATTERN.fullmatch(work_color):
+            raise ValueError(
+                "motion.transparency.work_color must be null for existing-alpha"
+            )
+    elif not isinstance(work_color, str) or not WORK_COLOR_PATTERN.fullmatch(
+        work_color
+    ):
         raise ValueError(
             "motion.transparency.work_color must be a #RRGGBB color for chroma-key"
         )
 
     frames = validate_frame_entries(motion.get("frames"), "motion.frames")
     for index, frame in enumerate(frames):
-        require_nonempty_string(frame.get("description"), f"motion.frames[{index}].description")
+        require_nonempty_string(
+            frame.get("description"), f"motion.frames[{index}].description"
+        )
         if packaged:
             expected_path = f"frames/{index:03d}.png"
             if frame.get("file") != expected_path:
@@ -170,8 +192,12 @@ def validate_motion(motion: object, *, packaged: bool) -> dict[str, object]:
             )
         target_fps = render.get("target_fps")
         if not is_positive_int(target_fps) or target_fps > 100:
-            raise ValueError("motion.render.target_fps must be an integer from 1 to 100")
-        render_frames = validate_frame_entries(render.get("frames"), "motion.render.frames")
+            raise ValueError(
+                "motion.render.target_fps must be an integer from 1 to 100"
+            )
+        render_frames = validate_frame_entries(
+            render.get("frames"), "motion.render.frames"
+        )
         if len(render_frames) > MAX_RENDER_FRAMES:
             raise ValueError(
                 f"motion.render.frames may contain at most {MAX_RENDER_FRAMES} frames"

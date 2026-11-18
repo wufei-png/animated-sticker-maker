@@ -61,10 +61,7 @@ class PackageStickerTests(unittest.TestCase):
             motion_path.write_text(
                 json.dumps(
                     motion_plan(
-                        [
-                            {"file": name, "duration_ms": 300}
-                            for name in names
-                        ],
+                        [{"file": name, "duration_ms": 300} for name in names],
                         semantic_hold_frame="hold.png",
                     )
                 ),
@@ -121,7 +118,9 @@ class PackageStickerTests(unittest.TestCase):
             self.assertEqual(report["policy_overrides"], [])
             self.assertEqual(report["technical_validation"]["status"], "pass")
             self.assertTrue(
-                report["technical_validation"]["checks"]["sticker_transparency_preserved"]
+                report["technical_validation"]["checks"][
+                    "sticker_transparency_preserved"
+                ]
             )
             self.assertTrue(report["webp_encoding"]["alpha_guard_applied"])
             self.assertEqual(
@@ -229,14 +228,10 @@ class PackageStickerTests(unittest.TestCase):
 
             self.assertEqual(package_sticker.package(args), 0)
             report = json.loads(
-                (output / "validation" / "report.json").read_text(
-                    encoding="utf-8"
-                )
+                (output / "validation" / "report.json").read_text(encoding="utf-8")
             )
             self.assertFalse(
-                report["technical_validation"]["checks"][
-                    "duration_in_default_range"
-                ]
+                report["technical_validation"]["checks"]["duration_in_default_range"]
             )
             self.assertEqual(report["technical_validation"]["status"], "pass")
             self.assertEqual(
@@ -293,9 +288,7 @@ class PackageStickerTests(unittest.TestCase):
             self.assertEqual(package_sticker.package(args), 0)
             report_path = output / "validation" / "report.json"
             report = json.loads(report_path.read_text(encoding="utf-8"))
-            report["technical_validation"]["checks"][
-                "duration_in_default_range"
-            ] = True
+            report["technical_validation"]["checks"]["duration_in_default_range"] = True
             report["policy_overrides"] = []
             report_path.write_text(json.dumps(report), encoding="utf-8")
 
@@ -473,9 +466,9 @@ class PackageStickerTests(unittest.TestCase):
             self.assertEqual(package_sticker.package(args), 2)
             self.assertEqual((output / "sticker.webp").read_bytes(), original)
             failed_report = json.loads(
-                (
-                    root / "package.failed" / "validation" / "report.json"
-                ).read_text(encoding="utf-8")
+                (root / "package.failed" / "validation" / "report.json").read_text(
+                    encoding="utf-8"
+                )
             )
             self.assertEqual(failed_report["status"], "technical_validation_failed")
             self.assertFalse(
@@ -525,13 +518,16 @@ class PackageStickerTests(unittest.TestCase):
             self.assertEqual(package_sticker.package(args), 0)
             original = (output / "sticker.webp").read_bytes()
 
-            with mock.patch.object(
-                package_sticker,
-                "validate_report_binding",
-                side_effect=ValueError("candidate report rejected"),
-            ), self.assertRaisesRegex(
-                ValueError,
-                "candidate report rejected",
+            with (
+                mock.patch.object(
+                    package_sticker,
+                    "validate_report_binding",
+                    side_effect=ValueError("candidate report rejected"),
+                ),
+                self.assertRaisesRegex(
+                    ValueError,
+                    "candidate report rejected",
+                ),
             ):
                 package_sticker.package(args)
 
@@ -614,9 +610,7 @@ class PackageStickerTests(unittest.TestCase):
             frames_dir = package / "source" / "frames"
             frames_dir.mkdir(parents=True)
             make_frame(frames_dir / "000.png", (20, 80, 70, 255))
-            motion = packaged_motion(
-                [{"file": "frames/000.png", "duration_ms": 1200}]
-            )
+            motion = packaged_motion([{"file": "frames/000.png", "duration_ms": 1200}])
             motion["schema_version"] = 1
             (package / "source" / "motion.json").write_text(
                 json.dumps(motion),
@@ -687,7 +681,9 @@ class PackageStickerTests(unittest.TestCase):
                     actual.append(frame.getpixel((8, 8)))
             self.assertEqual(actual, [render_colors[name] for name in declared_names])
 
-    def test_render_track_rejects_inconsistent_fps_and_excessive_frame_count(self) -> None:
+    def test_render_track_rejects_inconsistent_fps_and_excessive_frame_count(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "motion.json"
             mismatched_duration = motion_plan(
@@ -859,8 +855,8 @@ class ExportPlatformGifTests(unittest.TestCase):
         for index in range(4):
             make_frame(
                 render_dir / f"{index:04d}.png",
-                    (20 + index * 20, 80 + index * 10, 70 + index * 10, 255),
-                )
+                (20 + index * 20, 80 + index * 10, 70 + index * 10, 255),
+            )
         reference = reference_metadata()
         (package / "source" / "reference.json").write_text(
             json.dumps(reference),
@@ -912,7 +908,9 @@ class ExportPlatformGifTests(unittest.TestCase):
                             "default_range": [4, 8],
                         }
                     ],
-                    "artifact_fingerprint": artifact_integrity.package_fingerprint(package),
+                    "artifact_fingerprint": artifact_integrity.package_fingerprint(
+                        package
+                    ),
                     "canvas": [16, 16],
                     "frame_count": 2,
                     "total_duration_ms": 1200,
@@ -959,7 +957,9 @@ class ExportPlatformGifTests(unittest.TestCase):
                     "status": "pass",
                     "artifact_scope": "render_track",
                     "policy_overrides": [],
-                    "artifact_fingerprint": artifact_integrity.render_track_fingerprint(package),
+                    "artifact_fingerprint": artifact_integrity.render_track_fingerprint(
+                        package
+                    ),
                     "target_fps": 4,
                     "frame_count": 4,
                     "total_duration_ms": 1200,
@@ -996,7 +996,9 @@ class ExportPlatformGifTests(unittest.TestCase):
                         "status": "pass",
                         "artifact_scope": "package_source",
                         "policy_overrides": [],
-                        "artifact_fingerprint": artifact_integrity.package_fingerprint(package),
+                        "artifact_fingerprint": artifact_integrity.package_fingerprint(
+                            package
+                        ),
                         "visual_validation": {"status": "pass"},
                     }
                 ),
@@ -1055,7 +1057,9 @@ class ExportPlatformGifTests(unittest.TestCase):
             report = json.loads(report_path.read_text(encoding="utf-8"))
             report["technical_validation"] = {"status": "pass", "checks": {}}
             report_path.write_text(json.dumps(report), encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "checks must be a non-empty object"):
+            with self.assertRaisesRegex(
+                ValueError, "checks must be a non-empty object"
+            ):
                 export_platform_gif.load_validated_package(
                     package,
                     allow_unvalidated=False,
@@ -1150,7 +1154,9 @@ class ExportPlatformGifTests(unittest.TestCase):
         sampled, durations = gif_export_core.resample_timeline(
             frames, [100, 300, 600], fps=5
         )
-        self.assertEqual([frame.getpixel((0, 0))[0] for frame in sampled], [1, 2, 3, 3, 3])
+        self.assertEqual(
+            [frame.getpixel((0, 0))[0] for frame in sampled], [1, 2, 3, 3, 3]
+        )
         self.assertEqual(sum(durations), 1000)
         self.assertTrue(all(duration % 10 == 0 for duration in durations))
 
@@ -1186,8 +1192,7 @@ class ExportPlatformGifTests(unittest.TestCase):
 
     def test_palette_sampling_is_bounded_before_concatenation(self) -> None:
         frames = [
-            Image.new("RGBA", (64, 64), (index, 80, 70, 255))
-            for index in range(48)
+            Image.new("RGBA", (64, 64), (index, 80, 70, 255)) for index in range(48)
         ]
         samples = gif_export_core.collect_palette_samples(
             frames,
@@ -1198,13 +1203,17 @@ class ExportPlatformGifTests(unittest.TestCase):
         self.assertGreater(len(samples), 0)
 
     def test_fps_candidates_must_be_unique_and_descending(self) -> None:
-        self.assertEqual(export_platform_gif.parse_fps_candidates("30,24,15"), (30, 24, 15))
+        self.assertEqual(
+            export_platform_gif.parse_fps_candidates("30,24,15"), (30, 24, 15)
+        )
         with self.assertRaises(argparse.ArgumentTypeError):
             export_platform_gif.parse_fps_candidates("24,30")
         with self.assertRaises(argparse.ArgumentTypeError):
             export_platform_gif.parse_fps_candidates("30,30")
 
-    def test_nearest_resampling_upscales_native_pixel_art_without_new_colors(self) -> None:
+    def test_nearest_resampling_upscales_native_pixel_art_without_new_colors(
+        self,
+    ) -> None:
         frame = Image.new("RGBA", (2, 2), (0, 0, 0, 0))
         frame.putdata(
             [
@@ -1217,7 +1226,8 @@ class ExportPlatformGifTests(unittest.TestCase):
         fitted = export_platform_gif.fit_frame(frame, (10, 10), "nearest")
         self.assertEqual(fitted.size, (10, 10))
         fitted_colors = {
-            color for _, color in fitted.getcolors(maxcolors=fitted.width * fitted.height)
+            color
+            for _, color in fitted.getcolors(maxcolors=fitted.width * fitted.height)
         }
         source_colors = {
             color for _, color in frame.getcolors(maxcolors=frame.width * frame.height)
@@ -1234,7 +1244,9 @@ class ExportPlatformGifTests(unittest.TestCase):
         }
         self.assertTrue(alpha_values.issubset({0, 255}))
 
-    def test_nearest_resampling_uses_integer_scale_and_transparent_padding(self) -> None:
+    def test_nearest_resampling_uses_integer_scale_and_transparent_padding(
+        self,
+    ) -> None:
         frame = Image.new("RGBA", (4, 4), (0, 0, 0, 0))
         for y in (1, 2):
             for x in (1, 2):
@@ -1252,7 +1264,9 @@ class ExportPlatformGifTests(unittest.TestCase):
         with self.assertRaises(argparse.ArgumentTypeError):
             export_platform_gif.parse_spec_url("file:///tmp/spec.html")
         self.assertEqual(
-            export_platform_gif.parse_verified_on(datetime.now().astimezone().date().isoformat()),
+            export_platform_gif.parse_verified_on(
+                datetime.now().astimezone().date().isoformat()
+            ),
             datetime.now().astimezone().date().isoformat(),
         )
         with self.assertRaises(argparse.ArgumentTypeError):
@@ -1568,15 +1582,16 @@ class ExportPlatformGifTests(unittest.TestCase):
                     "sticker.export-report.json",
                 )
             }
-            previous = {
-                name: path.read_bytes() for name, path in paths.items()
-            }
+            previous = {name: path.read_bytes() for name, path in paths.items()}
 
-            with mock.patch.object(
-                sys,
-                "argv",
-                [*base_argv, "--max-bytes", "1"],
-            ), self.assertRaisesRegex(ValueError, "cannot meet 1 bytes"):
+            with (
+                mock.patch.object(
+                    sys,
+                    "argv",
+                    [*base_argv, "--max-bytes", "1"],
+                ),
+                self.assertRaisesRegex(ValueError, "cannot meet 1 bytes"),
+            ):
                 export_platform_gif.main()
 
             self.assertEqual(
@@ -1615,9 +1630,7 @@ class ExportPlatformGifTests(unittest.TestCase):
                 export_platform_gif.main()
 
             report = json.loads(
-                (export_dir / "sticker.export-report.json").read_text(
-                    encoding="utf-8"
-                )
+                (export_dir / "sticker.export-report.json").read_text(encoding="utf-8")
             )
             self.assertFalse(preview.exists())
             self.assertIsNone(report["preview"])
@@ -1740,12 +1753,7 @@ class ExportPlatformGifTests(unittest.TestCase):
             with mock.patch.object(sys, "argv", argv):
                 export_platform_gif.main()
 
-            report_path = (
-                package
-                / "exports"
-                / "low-fps"
-                / "sticker.export-report.json"
-            )
+            report_path = package / "exports" / "low-fps" / "sticker.export-report.json"
             report = json.loads(report_path.read_text(encoding="utf-8"))
             self.assertEqual(report["source_frame_count"], 2)
             self.assertEqual(report["preview"]["frame"], 8)
@@ -1777,10 +1785,7 @@ class ExportPlatformGifTests(unittest.TestCase):
             with mock.patch.object(sys, "argv", argv):
                 export_platform_gif.main()
             report_path = (
-                package
-                / "exports"
-                / "test-platform"
-                / "sticker.export-report.json"
+                package / "exports" / "test-platform" / "sticker.export-report.json"
             )
             report = json.loads(report_path.read_text(encoding="utf-8"))
             self.assertEqual(

@@ -100,9 +100,7 @@ def quantize_frames(
             dither=Image.Dither.FLOYDSTEINBERG,
         )
         indices = np.asarray(indexed).copy()
-        indices[np.asarray(frame.getchannel("A")) < alpha_threshold] = (
-            TRANSPARENT_INDEX
-        )
+        indices[np.asarray(frame.getchannel("A")) < alpha_threshold] = TRANSPARENT_INDEX
         indexed = Image.fromarray(indices, mode="P")
         indexed.putpalette(palette_data)
         indexed.info["transparency"] = TRANSPARENT_INDEX
@@ -195,9 +193,7 @@ def try_export_gif(
                 loop,
             )
             byte_size = candidate.stat().st_size
-            attempts.append(
-                {"fps": nominal_fps, "colors": colors, "bytes": byte_size}
-            )
+            attempts.append({"fps": nominal_fps, "colors": colors, "bytes": byte_size})
             if max_bytes is None or byte_size <= max_bytes:
                 candidate.replace(output)
                 return (colors, byte_size), attempts
@@ -233,8 +229,7 @@ def export_gif(
     variants: list[tuple[int | None, list[Image.Image], list[int]]]
     if fps_candidates:
         variants = [
-            (fps, *resample_timeline(frames, durations, fps))
-            for fps in fps_candidates
+            (fps, *resample_timeline(frames, durations, fps)) for fps in fps_candidates
         ]
     else:
         variants = [(None, frames, durations)]

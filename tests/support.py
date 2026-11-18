@@ -53,16 +53,11 @@ def passing_package_checks(*, render: bool = False) -> dict[str, bool]:
 
 
 def passing_render_checks() -> dict[str, bool]:
-    return {
-        check_id: True
-        for check_id in validation_integrity.RENDER_TRACK_CHECK_IDS
-    }
+    return {check_id: True for check_id in validation_integrity.RENDER_TRACK_CHECK_IDS}
 
 
 def passing_export_checks() -> dict[str, bool]:
-    return {
-        check_id: True for check_id in validation_integrity.EXPORT_GIF_CHECK_IDS
-    }
+    return {check_id: True for check_id in validation_integrity.EXPORT_GIF_CHECK_IDS}
 
 
 def make_frame(path: Path, color: tuple[int, int, int, int], size: int = 16) -> None:
@@ -93,9 +88,7 @@ def write_sticker_webp(
     for frame_path in frame_paths:
         with Image.open(frame_path) as image:
             frames.append(image.convert("RGBA"))
-    encoded_frames, alpha_guard_applied = package_sticker.prepare_webp_frames(
-        frames
-    )
+    encoded_frames, alpha_guard_applied = package_sticker.prepare_webp_frames(frames)
     encoded_frames[0].save(
         path,
         save_all=True,

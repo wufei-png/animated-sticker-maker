@@ -131,12 +131,7 @@ class ReviewPageTests(unittest.TestCase):
                 ]
             )
         self.require_success(EXPORT_SCRIPT, *arguments)
-        return (
-            package
-            / "exports"
-            / platform
-            / "sticker.export-report.json"
-        )
+        return package / "exports" / platform / "sticker.export-report.json"
 
     def test_overview_samples_at_most_twenty_four_frames(self) -> None:
         indices = review_page.overview_indices(240)
@@ -338,9 +333,7 @@ class ReviewPageTests(unittest.TestCase):
     def test_chinese_review_explains_semantic_hold_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            motion = json.loads(
-                (FIXTURE / "motion.json").read_text(encoding="utf-8")
-            )
+            motion = json.loads((FIXTURE / "motion.json").read_text(encoding="utf-8"))
             motion.pop("semantic_hold_frame")
             motion_path = root / "motion-without-hold.json"
             shutil.copytree(FIXTURE / "render", root / "render")
@@ -359,9 +352,7 @@ class ReviewPageTests(unittest.TestCase):
                 "--language",
                 "zh",
             )
-            html = report.with_name("report.review.html").read_text(
-                encoding="utf-8"
-            )
+            html = report.with_name("report.review.html").read_text(encoding="utf-8")
 
             self.assertIn('"declared":false', html)
             self.assertIn('"primary_index":2', html)
@@ -381,9 +372,7 @@ class ReviewPageTests(unittest.TestCase):
                 "--reference-image",
                 FIXTURE / "reference.png",
             )
-            html = report.with_name("report.review.html").read_text(
-                encoding="utf-8"
-            )
+            html = report.with_name("report.review.html").read_text(encoding="utf-8")
 
             self.assertIn('<html lang="en">', html)
             self.assertIn("<title>Animated sticker exposure review</title>", html)
@@ -393,9 +382,7 @@ class ReviewPageTests(unittest.TestCase):
     def test_review_explains_explicit_nonstandard_policy_override(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            motion = json.loads(
-                (FIXTURE / "motion.json").read_text(encoding="utf-8")
-            )
+            motion = json.loads((FIXTURE / "motion.json").read_text(encoding="utf-8"))
             motion.pop("render", None)
             for frame in motion["frames"]:
                 frame["duration_ms"] = 600
@@ -424,9 +411,7 @@ class ReviewPageTests(unittest.TestCase):
                 "--reference-image",
                 FIXTURE / "reference.png",
             )
-            html = report.with_name("report.review.html").read_text(
-                encoding="utf-8"
-            )
+            html = report.with_name("report.review.html").read_text(encoding="utf-8")
 
             self.assertIn("OUTSIDE DEFAULT · ALLOWED", html)
             self.assertIn("Explicit policy overrides", html)
@@ -437,12 +422,8 @@ class ReviewPageTests(unittest.TestCase):
     def test_render_export_uses_decoded_gif_with_render_comparison(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             package = self.package_fixture(Path(temporary))
-            self.record_visual_validation(
-                package / "validation" / "report.json"
-            )
-            self.record_visual_validation(
-                package / "validation" / "render-report.json"
-            )
+            self.record_visual_validation(package / "validation" / "report.json")
+            self.record_visual_validation(package / "validation" / "render-report.json")
             export_report = self.export_fixture(
                 package,
                 track="render",
@@ -521,9 +502,7 @@ class ReviewPageTests(unittest.TestCase):
             )
             report = package / "validation" / "report.json"
             self.require_success(REVIEW_SCRIPT, report)
-            html = report.with_name("report.review.html").read_text(
-                encoding="utf-8"
-            )
+            html = report.with_name("report.review.html").read_text(encoding="utf-8")
             self.assertIn("Included package reference", html)
             self.assertIn(
                 '"src":"../source/reference/reference.png"',
@@ -569,9 +548,7 @@ class ReviewPageTests(unittest.TestCase):
                 "--reference-image",
                 FIXTURE / "reference.png",
             )
-            html = report.with_name("report.review.html").read_text(
-                encoding="utf-8"
-            )
+            html = report.with_name("report.review.html").read_text(encoding="utf-8")
             self.assertIn('"technical_status":"fail"', html)
             self.assertIn("Encoded package unavailable", html)
 

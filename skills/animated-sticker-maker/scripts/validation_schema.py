@@ -104,9 +104,7 @@ def _validate_exact_keys(
     if not isinstance(value, dict):
         raise ValueError(f"{label} must be an object")
     if set(value) != expected:
-        raise ValueError(
-            f"{label} must contain exactly: {', '.join(sorted(expected))}"
-        )
+        raise ValueError(f"{label} must contain exactly: {', '.join(sorted(expected))}")
     return value
 
 
@@ -156,17 +154,14 @@ def _validate_frame_metrics(
         if (
             int(metric["transparent_pixels"]) > pixel_count
             or int(metric["partial_alpha_pixels"]) > pixel_count
-            or int(metric["transparent_pixels"])
-            + int(metric["partial_alpha_pixels"])
+            or int(metric["transparent_pixels"]) + int(metric["partial_alpha_pixels"])
             > pixel_count
         ):
             raise ValueError(
                 f"{label}[{index}] alpha pixel counts exceed the frame size"
             )
         if not isinstance(metric.get("border_is_transparent"), bool):
-            raise ValueError(
-                f"{label}[{index}].border_is_transparent must be boolean"
-            )
+            raise ValueError(f"{label}[{index}].border_is_transparent must be boolean")
         _validate_sha256(
             metric.get("pixel_sha256"),
             f"{label}[{index}].pixel_sha256",
@@ -218,9 +213,7 @@ def _validate_common_contract(report: dict[str, object]) -> str:
             details.append("missing " + ", ".join(sorted(missing)))
         if unexpected:
             details.append("unexpected " + ", ".join(sorted(unexpected)))
-        raise ValueError(
-            f"{scope} report fields are invalid: {'; '.join(details)}"
-        )
+        raise ValueError(f"{scope} report fields are invalid: {'; '.join(details)}")
 
     _validate_sha256(report.get("artifact_fingerprint"), "artifact_fingerprint")
     if not isinstance(report.get("deliverable_ready"), bool):
@@ -241,9 +234,7 @@ def _validate_common_contract(report: dict[str, object]) -> str:
         not isinstance(key, str) or not isinstance(value, bool)
         for key, value in checks.items()
     ):
-        raise ValueError(
-            "technical_validation.checks must map strings to booleans"
-        )
+        raise ValueError("technical_validation.checks must map strings to booleans")
     visual = _validate_exact_keys(
         report.get("visual_validation"),
         {"status", "required", "notes"},
@@ -255,17 +246,13 @@ def _validate_common_contract(report: dict[str, object]) -> str:
         )
     visual_status = visual.get("status")
     if visual_status not in {"pending", "pass", "fail"}:
-        raise ValueError(
-            "visual_validation.status must be pending, pass, or fail"
-        )
+        raise ValueError("visual_validation.status must be pending, pass, or fail")
     notes = visual.get("notes")
     if not isinstance(notes, dict):
         raise ValueError("visual_validation.notes must be an object")
     if visual_status == "pending":
         if notes:
-            raise ValueError(
-                "pending visual_validation.notes must be empty"
-            )
+            raise ValueError("pending visual_validation.notes must be empty")
     else:
         _validate_exact_keys(notes, set(NOTE_FIELDS), "visual_validation.notes")
         if any(
@@ -405,25 +392,17 @@ def _validate_gif_record(
     if selected_fps is not None and not (
         type(selected_fps) is int and 1 <= selected_fps <= 100
     ):
-        raise ValueError(
-            "gif.selected_fps must be null or an integer from 1 to 100"
-        )
+        raise ValueError("gif.selected_fps must be null or an integer from 1 to 100")
     min_colors = gif.get("min_colors")
     if not (
-        type(min_colors) is int
-        and 1 <= min_colors <= 255
-        and int(colors) >= min_colors
+        type(min_colors) is int and 1 <= min_colors <= 255 and int(colors) >= min_colors
     ):
         raise ValueError(
             "gif.min_colors must be between 1 and the selected palette size"
         )
     alpha_threshold = gif.get("alpha_threshold")
-    if not (
-        type(alpha_threshold) is int and 1 <= alpha_threshold <= 254
-    ):
-        raise ValueError(
-            "gif.alpha_threshold must be an integer from 1 to 254"
-        )
+    if not (type(alpha_threshold) is int and 1 <= alpha_threshold <= 254):
+        raise ValueError("gif.alpha_threshold must be an integer from 1 to 254")
     attempts = gif.get("attempts")
     if not isinstance(attempts, list) or not attempts:
         raise ValueError("gif.attempts must be a non-empty array")
@@ -434,33 +413,23 @@ def _validate_gif_record(
             f"gif.attempts[{index}]",
         )
         fps = attempt.get("fps")
-        if fps is not None and not (
-            type(fps) is int and 1 <= fps <= 100
-        ):
-            raise ValueError(
-                f"gif.attempts[{index}].fps must be null or 1 to 100"
-            )
+        if fps is not None and not (type(fps) is int and 1 <= fps <= 100):
+            raise ValueError(f"gif.attempts[{index}].fps must be null or 1 to 100")
         attempt_colors = attempt.get("colors")
         if (
             type(attempt_colors) is not int
             or attempt_colors not in GIF_COLOR_CANDIDATES
             or int(attempt_colors) < int(min_colors)
         ):
-            raise ValueError(
-                f"gif.attempts[{index}].colors is inconsistent"
-            )
+            raise ValueError(f"gif.attempts[{index}].colors is inconsistent")
         if not _is_positive_int(attempt.get("bytes")):
-            raise ValueError(
-                f"gif.attempts[{index}].bytes must be positive"
-            )
+            raise ValueError(f"gif.attempts[{index}].bytes must be positive")
     if attempts[-1] != {
         "fps": selected_fps,
         "colors": colors,
         "bytes": gif["bytes"],
     }:
-        raise ValueError(
-            "gif selected settings must match the final export attempt"
-        )
+        raise ValueError("gif selected settings must match the final export attempt")
     _validate_sha256(gif.get("sha256"), "gif.sha256")
 
     validation = _validate_exact_keys(
@@ -474,9 +443,7 @@ def _validate_gif_record(
     )
     encoded_frame_count = validation.get("encoded_frame_count")
     if not _is_positive_int(encoded_frame_count):
-        raise ValueError(
-            "gif.validation.encoded_frame_count must be positive"
-        )
+        raise ValueError("gif.validation.encoded_frame_count must be positive")
     durations = validation.get("durations_ms")
     if not (
         isinstance(durations, list)
@@ -488,17 +455,10 @@ def _validate_gif_record(
             "per encoded frame"
         )
     validation_total = validation.get("total_duration_ms")
-    if (
-        not _is_positive_int(validation_total)
-        or validation_total != sum(durations)
-    ):
-        raise ValueError(
-            "gif.validation.total_duration_ms must equal its durations"
-        )
+    if not _is_positive_int(validation_total) or validation_total != sum(durations):
+        raise ValueError("gif.validation.total_duration_ms must equal its durations")
     if abs(int(validation_total) - int(report["total_duration_ms"])) > 10:
-        raise ValueError(
-            "gif.validation duration must match the exported timeline"
-        )
+        raise ValueError("gif.validation duration must match the exported timeline")
 
 
 def _validate_preview_record(
@@ -512,9 +472,7 @@ def _validate_preview_record(
         raise ValueError("preview.frame must be a positive integer")
     frame_source = preview.get("frame_source")
     if frame_source not in {"authored", "exported"}:
-        raise ValueError(
-            "preview.frame_source must be 'authored' or 'exported'"
-        )
+        raise ValueError("preview.frame_source must be 'authored' or 'exported'")
     if frame_source == "exported" and int(frame) > int(report["frame_count"]):
         raise ValueError("preview.frame is outside the exported timeline")
     mode = preview.get("mode")
@@ -525,16 +483,12 @@ def _validate_preview_record(
         if colors is not None:
             raise ValueError("rgba preview.colors must be null")
     elif type(colors) is not int or colors not in PREVIEW_COLOR_CANDIDATES:
-        raise ValueError(
-            "indexed preview.colors must be a supported palette size"
-        )
+        raise ValueError("indexed preview.colors must be a supported palette size")
     if not _is_positive_int(preview.get("bytes")):
         raise ValueError("preview.bytes must be a positive integer")
     max_bytes = preview.get("max_bytes")
     if max_bytes is not None and not _is_positive_int(max_bytes):
-        raise ValueError(
-            "preview.max_bytes must be null or a positive integer"
-        )
+        raise ValueError("preview.max_bytes must be null or a positive integer")
     _validate_sha256(preview.get("sha256"), "preview.sha256")
 
 
@@ -561,9 +515,7 @@ def _validate_export_contract(report: dict[str, object]) -> None:
         if not isinstance(report.get(field), str) or not report[field]:
             raise ValueError(f"export report {field} must be non-empty")
     if report.get("frame_track") not in {"keyframes", "render"}:
-        raise ValueError(
-            "export report frame_track must be 'keyframes' or 'render'"
-        )
+        raise ValueError("export report frame_track must be 'keyframes' or 'render'")
     _validate_export_records(report)
     gif = _validate_exact_keys(
         report.get("gif"),

@@ -58,9 +58,7 @@ def frame_records(
             {
                 "index": index,
                 "label": (
-                    f"F{index + 1}"
-                    if prefix == "authored"
-                    else f"R{index + 1:04d}"
+                    f"F{index + 1}" if prefix == "authored" else f"R{index + 1:04d}"
                 ),
                 "src": relative_media_url(path, output_dir),
                 "path": str(entry["file"]),
@@ -91,17 +89,12 @@ def encoded_frame_records(
                 duration = image.info.get("duration")
                 durations.append(duration if isinstance(duration, int) else 0)
         if len(durations) != frame_count or any(
-            not isinstance(duration, int) or duration <= 0
-            for duration in durations
+            not isinstance(duration, int) or duration <= 0 for duration in durations
         ):
-            raise ValueError(
-                f"encoded artifact has invalid frame timing: {path}"
-            )
+            raise ValueError(f"encoded artifact has invalid frame timing: {path}")
 
         try:
-            display_path = path.resolve().relative_to(
-                package.resolve()
-            ).as_posix()
+            display_path = path.resolve().relative_to(package.resolve()).as_posix()
         except ValueError:
             display_path = path.name
         records: list[dict[str, object]] = []

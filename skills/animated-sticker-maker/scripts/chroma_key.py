@@ -12,11 +12,17 @@ from PIL import Image
 def parse_hex_color(value: str) -> np.ndarray:
     value = value.strip().lstrip("#")
     if len(value) != 6:
-        raise argparse.ArgumentTypeError("key must be 'auto' or a six-digit RGB hex color")
+        raise argparse.ArgumentTypeError(
+            "key must be 'auto' or a six-digit RGB hex color"
+        )
     try:
-        return np.array([int(value[i : i + 2], 16) for i in (0, 2, 4)], dtype=np.float32)
+        return np.array(
+            [int(value[i : i + 2], 16) for i in (0, 2, 4)], dtype=np.float32
+        )
     except ValueError as exc:
-        raise argparse.ArgumentTypeError("key must be 'auto' or a six-digit RGB hex color") from exc
+        raise argparse.ArgumentTypeError(
+            "key must be 'auto' or a six-digit RGB hex color"
+        ) from exc
 
 
 def border_pixels(rgb: np.ndarray, border_width: int) -> np.ndarray:
@@ -91,7 +97,11 @@ def main() -> None:
 
     image = Image.open(args.input)
     rgb = np.asarray(image.convert("RGB"), dtype=np.float32)
-    key = estimate_border_key(rgb, args.border_width) if args.key == "auto" else parse_hex_color(args.key)
+    key = (
+        estimate_border_key(rgb, args.border_width)
+        if args.key == "auto"
+        else parse_hex_color(args.key)
+    )
     transparent_threshold = (
         12.0 if args.transparent_threshold is None else args.transparent_threshold
     )
@@ -102,7 +112,9 @@ def main() -> None:
         # deliberately lower threshold must provide an explicit key.
         border = border_pixels(rgb, args.border_width)
         border_distance = np.linalg.norm(border - key.reshape(1, 3), axis=1)
-        transparent_threshold = max(transparent_threshold, float(border_distance.max()) + 2.0)
+        transparent_threshold = max(
+            transparent_threshold, float(border_distance.max()) + 2.0
+        )
     result = remove_chroma(
         image,
         key,
@@ -118,7 +130,9 @@ def main() -> None:
     print(f"Key color: {key_hex}")
     print(f"Transparent threshold: {transparent_threshold:.2f}")
     print(f"Transparent pixels: {int(np.count_nonzero(alpha == 0))}/{alpha.size}")
-    print(f"Partially transparent pixels: {int(np.count_nonzero((alpha > 0) & (alpha < 255)))}/{alpha.size}")
+    print(
+        f"Partially transparent pixels: {int(np.count_nonzero((alpha > 0) & (alpha < 255)))}/{alpha.size}"
+    )
 
 
 if __name__ == "__main__":

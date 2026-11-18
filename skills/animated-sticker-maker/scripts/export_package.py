@@ -56,9 +56,7 @@ def load_validated_package(
     if len(durations) != len(entries) or not all(
         is_positive_int(value) for value in durations
     ):
-        raise ValueError(
-            "every motion frame must have a positive integer duration_ms"
-        )
+        raise ValueError("every motion frame must have a positive integer duration_ms")
 
     report = json.loads(report_path.read_text(encoding="utf-8"))
     expected_fingerprint = report.get("artifact_fingerprint")
@@ -118,12 +116,8 @@ def load_validated_package(
                 )
         else:
             derived_report = json.loads(track_report.read_text(encoding="utf-8"))
-            expected_track_fingerprint = derived_report.get(
-                "artifact_fingerprint"
-            )
-            if derived_report.get(
-                "artifact_scope"
-            ) != "render_track" or not isinstance(
+            expected_track_fingerprint = derived_report.get("artifact_fingerprint")
+            if derived_report.get("artifact_scope") != "render_track" or not isinstance(
                 expected_track_fingerprint, str
             ):
                 raise ValueError(
@@ -191,9 +185,7 @@ def automatic_preview_frame(
                 )
     keyframes = sorted((package / "source/frames").glob("*.png"))
     if len(keyframes) != len(entries):
-        raise ValueError(
-            "cannot resolve automatic preview from package keyframes"
-        )
+        raise ValueError("cannot resolve automatic preview from package keyframes")
     with Image.open(keyframes[preview_index]) as source:
         return (
             fit_frame(source.convert("RGBA"), size, resampling),

@@ -15,10 +15,9 @@ EXIT_CODES = {"healthy": 0, "invalid": 1, "incomplete": 2}
 def infer_target(path: Path) -> tuple[str, Path] | None:
     root = path.resolve()
     candidates: list[tuple[str, Path]] = []
-    if (
-        (root / "source" / "motion.json").is_file()
-        and (root / "validation" / "report.json").is_file()
-    ):
+    if (root / "source" / "motion.json").is_file() and (
+        root / "validation" / "report.json"
+    ).is_file():
         candidates.append(("package", root))
     if (root / "motion.json").is_file():
         candidates.append(("motion", root / "motion.json"))
@@ -61,10 +60,7 @@ def diagnose(kind: str | None, path: Path | None) -> Diagnosis:
 def print_human(result: dict[str, object]) -> None:
     target = result["target"]
     assert isinstance(target, dict)
-    print(
-        f"doctor: {result['status']} "
-        f"{target['kind']} {target['path']}"
-    )
+    print(f"doctor: {result['status']} {target['kind']} {target['path']}")
     for check in result["checks"]:
         assert isinstance(check, dict)
         label = str(check["status"]).upper()

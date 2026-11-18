@@ -45,7 +45,9 @@ def parse_size(value: str) -> tuple[int, int]:
     try:
         width, height = (int(part) for part in parts)
     except ValueError as exc:
-        raise argparse.ArgumentTypeError("expected size must look like 1024x1024") from exc
+        raise argparse.ArgumentTypeError(
+            "expected size must look like 1024x1024"
+        ) from exc
     if width <= 0 or height <= 0:
         raise argparse.ArgumentTypeError("expected size must be positive")
     return width, height
@@ -62,9 +64,8 @@ def resolve_frame(frames_dir: Path, file_value: str) -> Path:
         raise ValueError("motion frame paths must stay beneath the frames directory")
     candidates = [frames_dir / relative, frames_dir / relative.name]
     for candidate in candidates:
-        if (
-            candidate.is_file()
-            and candidate.resolve().is_relative_to(frames_dir.resolve())
+        if candidate.is_file() and candidate.resolve().is_relative_to(
+            frames_dir.resolve()
         ):
             return candidate
     raise FileNotFoundError(f"frame not found for {file_value!r} in {frames_dir}")
@@ -88,7 +89,9 @@ def resolve_render_frames(
     return frames
 
 
-def reference_metadata(reference_image: Path, source_dir: Path, include: bool) -> dict[str, object]:
+def reference_metadata(
+    reference_image: Path, source_dir: Path, include: bool
+) -> dict[str, object]:
     if not reference_image.is_file():
         raise FileNotFoundError(f"reference image not found: {reference_image}")
     with Image.open(reference_image) as image:
@@ -215,7 +218,9 @@ def build_candidate(args: argparse.Namespace) -> int:
             f"motion.canvas {canvas} does not match --expected-size {args.expected_size}"
         )
     frame_entries = motion["frames"]
-    frame_paths = [resolve_frame(args.frames_dir, entry["file"]) for entry in frame_entries]
+    frame_paths = [
+        resolve_frame(args.frames_dir, entry["file"]) for entry in frame_entries
+    ]
     semantic_hold_index = None
     semantic_hold = motion.get("semantic_hold_frame")
     if semantic_hold is not None:
@@ -247,10 +252,17 @@ def build_candidate(args: argparse.Namespace) -> int:
             DEFAULT_FRAME_RANGE[0] <= len(frames) <= DEFAULT_FRAME_RANGE[1]
         ),
         "source_frames_are_rgba": all(mode == "RGBA" for mode in source_modes),
-        "all_frames_match_expected_size": all(frame.size == args.expected_size for frame in frames),
-        "all_borders_transparent": all(metric["border_is_transparent"] for metric in metrics),
-        "all_frames_have_visible_pixels": all(metric["alpha_bbox"] is not None for metric in metrics),
-        "all_frames_are_unique": len({metric["pixel_sha256"] for metric in metrics}) == len(frames),
+        "all_frames_match_expected_size": all(
+            frame.size == args.expected_size for frame in frames
+        ),
+        "all_borders_transparent": all(
+            metric["border_is_transparent"] for metric in metrics
+        ),
+        "all_frames_have_visible_pixels": all(
+            metric["alpha_bbox"] is not None for metric in metrics
+        ),
+        "all_frames_are_unique": len({metric["pixel_sha256"] for metric in metrics})
+        == len(frames),
         "duration_in_default_range": (
             DEFAULT_DURATION_RANGE_MS[0]
             <= total_duration
@@ -258,7 +270,10 @@ def build_candidate(args: argparse.Namespace) -> int:
         ),
     }
     policy_overrides = []
-    if not checks["frame_count_in_default_range"] and args.allow_nonstandard_frame_count:
+    if (
+        not checks["frame_count_in_default_range"]
+        and args.allow_nonstandard_frame_count
+    ):
         policy_overrides.append(
             {
                 "check_id": "frame_count_in_default_range",
@@ -276,12 +291,9 @@ def build_candidate(args: argparse.Namespace) -> int:
                 "default_range": list(DEFAULT_DURATION_RANGE_MS),
             }
         )
-    overridden_checks = {
-        str(override["check_id"]) for override in policy_overrides
-    }
+    overridden_checks = {str(override["check_id"]) for override in policy_overrides}
     technical_pass = all(
-        passed or check_id in overridden_checks
-        for check_id, passed in checks.items()
+        passed or check_id in overridden_checks for check_id, passed in checks.items()
     )
 
     frame_output, validation_dir = initialize_output(args.output)
@@ -304,9 +316,9 @@ def build_candidate(args: argparse.Namespace) -> int:
         canonical_name = f"frames/{normalized_name}"
         entry["file"] = canonical_name
     if semantic_hold_index is not None:
-        packaged_motion["semantic_hold_frame"] = (
-            packaged_motion["frames"][semantic_hold_index]["file"]
-        )
+        packaged_motion["semantic_hold_frame"] = packaged_motion["frames"][
+            semantic_hold_index
+        ]["file"]
     render_summary = None
     render_report = None
     render = motion.get("render")
@@ -328,7 +340,8 @@ def build_candidate(args: argparse.Namespace) -> int:
         render_checks = {
             "frame_count_matches_ordered_entries": len(render_frames)
             == len(render_entries),
-            "duration_count_matches_frames": len(render_durations) == len(render_frames),
+            "duration_count_matches_frames": len(render_durations)
+            == len(render_frames),
             "total_duration_matches_authored_keyframes": sum(render_durations)
             == total_duration,
             "target_fps_matches_timeline": abs(

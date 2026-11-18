@@ -115,17 +115,13 @@ def resolve_reference(
     metadata_path = source / "reference.json"
     metadata = load_json_object(metadata_path, "reference metadata")
     if source_report.get("reference") != metadata:
-        raise ValueError(
-            "package source report reference metadata is inconsistent"
-        )
+        raise ValueError("package source report reference metadata is inconsistent")
     motion_reference = motion.get("reference")
     if not isinstance(motion_reference, dict) or any(
         metadata.get(field) != motion_reference.get(field)
         for field in ("filename", "sha256", "included_path")
     ):
-        raise ValueError(
-            "packaged motion reference metadata is inconsistent"
-        )
+        raise ValueError("packaged motion reference metadata is inconsistent")
     expected_sha = metadata.get("sha256")
     if not isinstance(expected_sha, str):
         raise ValueError("reference metadata must contain sha256")
@@ -188,10 +184,7 @@ def overview_indices(
     if frame_count <= limit:
         return list(range(frame_count))
     indices = sorted(
-        {
-            round(index * (frame_count - 1) / (limit - 1))
-            for index in range(limit)
-        }
+        {round(index * (frame_count - 1) / (limit - 1)) for index in range(limit)}
     )
     if (
         required_index is not None
@@ -225,9 +218,7 @@ def semantic_hold(
             range(len(entries)),
             key=lambda candidate: int(entries[candidate]["duration_ms"]),
         )
-    start_ms = sum(
-        int(entry["duration_ms"]) for entry in entries[:index]
-    )
+    start_ms = sum(int(entry["duration_ms"]) for entry in entries[:index])
     duration_ms = int(entries[index]["duration_ms"])
     return {
         "authored_index": index,
@@ -376,8 +367,7 @@ def build_technical_details(
     overrides_by_check = {
         str(override["check_id"]): override
         for override in policy_overrides
-        if isinstance(override, dict)
-        and isinstance(override.get("check_id"), str)
+        if isinstance(override, dict) and isinstance(override.get("check_id"), str)
     }
 
     files = [
@@ -496,9 +486,7 @@ def build_review_model(
                 candidate,
                 package,
                 format_label=str(formats["webp"]),
-                description_template=str(
-                    text["decoded_frame_description"]
-                ),
+                description_template=str(text["decoded_frame_description"]),
             )
             inspector_kind = "encoded"
             auxiliary = authored
@@ -622,9 +610,7 @@ def build_review_model(
                 len(inspector),
                 required_index=int(hold["primary_index"]),
             ),
-            "total_duration_ms": sum(
-                int(frame["duration_ms"]) for frame in inspector
-            ),
+            "total_duration_ms": sum(int(frame["duration_ms"]) for frame in inspector),
             "loop": motion["loop"],
         },
         "auxiliary_frames": {
@@ -634,9 +620,7 @@ def build_review_model(
                 else auxiliary_labels["authored"]
             ),
             "frames": auxiliary,
-            "overview_indices": overview_indices(len(auxiliary))
-            if auxiliary
-            else [],
+            "overview_indices": overview_indices(len(auxiliary)) if auxiliary else [],
         },
         "semantic_hold": {
             **hold,

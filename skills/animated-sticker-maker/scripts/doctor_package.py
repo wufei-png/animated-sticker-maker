@@ -190,9 +190,7 @@ def diagnose_primary_package(
     )
     semantic_hold = motion.get("semantic_hold_frame")
     if semantic_hold is not None:
-        matches = sum(
-            1 for entry in entries if entry.get("file") == semantic_hold
-        )
+        matches = sum(1 for entry in entries if entry.get("file") == semantic_hold)
         diagnosis.boolean(
             "package.semantic-hold",
             matches == 1,
@@ -233,7 +231,9 @@ def diagnose_primary_package(
         }
         diagnosis.boolean(
             "package.report.metadata",
-            all(report.get(field) == value for field, value in expected_metadata.items()),
+            all(
+                report.get(field) == value for field, value in expected_metadata.items()
+            ),
             "package report metadata matches the motion plan",
             "package report metadata does not match the motion plan",
             package / "validation" / "report.json",
@@ -285,7 +285,9 @@ def diagnose_render_track(
         }
         diagnosis.boolean(
             "render.report.metadata",
-            all(report.get(field) == value for field, value in expected_metadata.items()),
+            all(
+                report.get(field) == value for field, value in expected_metadata.items()
+            ),
             "render report metadata matches the motion plan",
             "render report metadata does not match the motion plan",
             package / "validation" / "render-report.json",

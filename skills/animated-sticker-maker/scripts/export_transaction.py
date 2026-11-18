@@ -60,9 +60,7 @@ def commit_staged_files(
         backup_dir.mkdir()
         final_paths = {final.resolve() for _, final in entries}
         if any(path.resolve() in final_paths for path in removals):
-            raise ValueError(
-                "transaction removals must not overlap replacements"
-            )
+            raise ValueError("transaction removals must not overlap replacements")
         affected = [final for _, final in entries] + list(removals)
         for index, final in enumerate(affected):
             if final.exists():
@@ -118,9 +116,7 @@ def previous_export_artifacts(
         gif = loaded.get("gif") if isinstance(loaded, dict) else None
         gif_path = gif.get("path") if isinstance(gif, dict) else None
         preview = loaded.get("preview") if isinstance(loaded, dict) else None
-        preview_value = (
-            preview.get("path") if isinstance(preview, dict) else None
-        )
+        preview_value = preview.get("path") if isinstance(preview, dict) else None
         preliminary_names = {candidate.name}
         if isinstance(gif_path, str):
             preliminary_names.add(gif_path)
@@ -145,8 +141,7 @@ def previous_export_artifacts(
             ) from exc
         overlap = {path.resolve() for path in paths} & collision_paths
         replaces_existing_set = (
-            report_path.resolve() in overlap
-            or output_path.resolve() in overlap
+            report_path.resolve() in overlap or output_path.resolve() in overlap
         )
         if overlap and not replaces_existing_set:
             claimed = ", ".join(sorted(path.name for path in overlap))
@@ -189,9 +184,7 @@ def _validated_export_set(
     preview = report.get("preview")
     preview_path = None
     if preview is not None:
-        preview_path = (
-            preview.get("path") if isinstance(preview, dict) else None
-        )
+        preview_path = preview.get("path") if isinstance(preview, dict) else None
         if (
             not isinstance(preview_path, str)
             or not preview_path
@@ -209,8 +202,7 @@ def _validated_export_set(
     expected_fingerprint = report.get("artifact_fingerprint")
     if (
         not isinstance(expected_fingerprint, str)
-        or report_artifact_fingerprint(report_path, report)
-        != expected_fingerprint
+        or report_artifact_fingerprint(report_path, report) != expected_fingerprint
     ):
         raise ValueError(
             "artifact_fingerprint does not match the declared export files"
@@ -227,18 +219,12 @@ def _validated_export_set(
             or candidate.resolve().parent != export_dir.resolve()
             or candidate.is_symlink()
         ):
-            raise ValueError(
-                f"export artifact escapes its directory: {path_value}"
-            )
+            raise ValueError(f"export artifact escapes its directory: {path_value}")
         if candidate.exists() and not candidate.is_file():
-            raise ValueError(
-                f"export artifact must be a file: {candidate}"
-            )
+            raise ValueError(f"export artifact must be a file: {candidate}")
         actual_sha256 = sha256_path(candidate)
         if record.get("sha256") != actual_sha256:
-            raise ValueError(
-                f"{label}.sha256 does not match {path_value}"
-            )
+            raise ValueError(f"{label}.sha256 does not match {path_value}")
         if record.get("bytes") != candidate.stat().st_size:
             raise ValueError(f"{label}.bytes does not match {path_value}")
         paths.add(candidate)

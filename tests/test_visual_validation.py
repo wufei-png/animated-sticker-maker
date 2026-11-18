@@ -320,9 +320,7 @@ class RecordVisualValidationTests(unittest.TestCase):
             source_report_path = (
                 report_path.parent.parent.parent / "validation" / "report.json"
             )
-            source_report = json.loads(
-                source_report_path.read_text(encoding="utf-8")
-            )
+            source_report = json.loads(source_report_path.read_text(encoding="utf-8"))
             source_report["frames"][0]["border_is_transparent"] = False
 
             with self.assertRaisesRegex(
@@ -420,9 +418,7 @@ class RecordVisualValidationTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temporary:
             report_path = self.make_report(Path(temporary))
-            record_visual_validation.update_report(
-                self.validation_args(report_path)
-            )
+            record_visual_validation.update_report(self.validation_args(report_path))
             report = json.loads(report_path.read_text(encoding="utf-8"))
             report["visual_validation"]["notes"]["comment"] = "unbound"
             with self.assertRaisesRegex(
@@ -552,9 +548,7 @@ class RecordVisualValidationTests(unittest.TestCase):
                 )
             diagnostic = self.make_report(root, source_validation_complete=False)
             with self.assertRaisesRegex(ValueError, "cannot become deliverable"):
-                record_visual_validation.update_report(
-                    self.validation_args(diagnostic)
-                )
+                record_visual_validation.update_report(self.validation_args(diagnostic))
 
 
 if __name__ == "__main__":

@@ -98,7 +98,8 @@ def validate_sticker_webp(
             "sticker_is_webp": image.format == "WEBP",
             "sticker_matches_expected_size": image.size == expected_size,
             "sticker_frame_count_matches_source": frame_count == expected_frame_count,
-            "sticker_loop_matches_motion": image.info.get("loop") == expected_loop_count,
+            "sticker_loop_matches_motion": image.info.get("loop")
+            == expected_loop_count,
         }
         transparency_preserved = True
         for index in range(frame_count):

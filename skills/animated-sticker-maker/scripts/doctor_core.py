@@ -90,12 +90,8 @@ class Diagnosis:
             "status": self.status,
             "target": {"kind": self.kind, "path": str(self.path)},
             "checks": checks,
-            "errors": [
-                check for check in checks if check["status"] == "error"
-            ],
-            "warnings": [
-                check for check in checks if check["status"] == "warning"
-            ],
+            "errors": [check for check in checks if check["status"] == "error"],
+            "warnings": [check for check in checks if check["status"] == "warning"],
         }
 
 
@@ -113,9 +109,7 @@ def add_report_phase_checks(
     path: Path,
 ) -> None:
     technical = report.get("technical_validation")
-    technical_status = (
-        technical.get("status") if isinstance(technical, dict) else None
-    )
+    technical_status = technical.get("status") if isinstance(technical, dict) else None
     diagnosis.add(
         f"{prefix}.technical",
         "pass" if technical_status == "pass" else "error",

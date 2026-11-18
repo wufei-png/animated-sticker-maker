@@ -106,9 +106,7 @@ class GoldenWorkflowTests(unittest.TestCase):
             assert path is not None
             arguments.extend([kind, path])
         result = self.run_cli(DOCTOR_SCRIPT, *arguments, cwd=cwd)
-        expected_code = {"healthy": 0, "invalid": 1, "incomplete": 2}[
-            expected_status
-        ]
+        expected_code = {"healthy": 0, "invalid": 1, "incomplete": 2}[expected_status]
         self.assertEqual(
             result.returncode,
             expected_code,
@@ -182,20 +180,13 @@ class GoldenWorkflowTests(unittest.TestCase):
                 ]
             )
         self.require_success(EXPORT_SCRIPT, *arguments)
-        return (
-            package
-            / "exports"
-            / platform
-            / "sticker.export-report.json"
-        )
+        return package / "exports" / platform / "sticker.export-report.json"
 
     def build_passed_scenario(self, root: Path, track: str) -> tuple[Path, Path]:
         package = self.package_fixture(root)
         self.record_visual_validation(package / "validation" / "report.json")
         if track == "render":
-            self.record_visual_validation(
-                package / "validation" / "render-report.json"
-            )
+            self.record_visual_validation(package / "validation" / "render-report.json")
             self.doctor("healthy", "package", package)
         else:
             # The package as a whole remains incomplete because its optional
@@ -210,9 +201,7 @@ class GoldenWorkflowTests(unittest.TestCase):
         return package, export_report
 
     def _shared_scenario(self, track: str) -> tuple[Path, Path]:
-        shared = (
-            self._shared_keyframes if track == "keyframes" else self._shared_render
-        )
+        shared = self._shared_keyframes if track == "keyframes" else self._shared_render
         if shared is None:
             raise AssertionError(f"shared {track} scenario was not built")
         return shared
@@ -276,9 +265,7 @@ class GoldenWorkflowTests(unittest.TestCase):
         report = json.loads(export_report.read_text(encoding="utf-8"))
         self.assertEqual(report["frame_track"], "render")
         self.assertEqual(report["gif"]["selected_fps"], 5)
-        self.assertTrue(
-            (package / "validation" / "render-report.json").is_file()
-        )
+        self.assertTrue((package / "validation" / "render-report.json").is_file())
 
     def test_direct_doctor_rechecks_shared_render_boundaries(self) -> None:
         package, export_report = self._copy_scenario("render")
@@ -306,8 +293,7 @@ class GoldenWorkflowTests(unittest.TestCase):
         self.assertEqual(result["status"], "incomplete")
         self.assertTrue(
             any(
-                check["id"] == "render.report.visual"
-                and check["status"] == "warning"
+                check["id"] == "render.report.visual" and check["status"] == "warning"
                 for check in result["warnings"]
             )
         )
@@ -367,9 +353,7 @@ class GoldenWorkflowTests(unittest.TestCase):
                 package, export_report = self._copy_scenario(track)
                 upstream_report = package / relative_report
                 upstream = json.loads(upstream_report.read_text(encoding="utf-8"))
-                upstream["technical_validation"]["checks"] = {
-                    "placeholder": True
-                }
+                upstream["technical_validation"]["checks"] = {"placeholder": True}
                 upstream_report.write_text(
                     json.dumps(upstream),
                     encoding="utf-8",
@@ -499,9 +483,7 @@ class GoldenWorkflowTests(unittest.TestCase):
             with self.subTest(mutation=mutation):
                 package, export_report = self._copy_scenario("render")
                 if mutation == "render-frame":
-                    self.mutate_png(
-                        package / "source" / "rendered-frames" / "0000.png"
-                    )
+                    self.mutate_png(package / "source" / "rendered-frames" / "0000.png")
                     self.doctor("invalid", "package", package)
                     result = self.run_cli(
                         EXPORT_SCRIPT,
@@ -523,9 +505,7 @@ class GoldenWorkflowTests(unittest.TestCase):
                         VERIFIED_ON,
                     )
                 elif mutation == "render-report":
-                    self.mutate_json(
-                        package / "validation" / "render-report.json"
-                    )
+                    self.mutate_json(package / "validation" / "render-report.json")
                     self.doctor("invalid", "export", export_report)
                     result = self.run_cli(
                         VALIDATION_SCRIPT,

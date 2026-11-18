@@ -14,9 +14,7 @@ class DoctorTests(unittest.TestCase):
             motion_path = Path(temporary) / "motion.json"
             motion_path.write_text(
                 json.dumps(
-                    motion_plan(
-                        [{"file": "frames/000.png", "duration_ms": 1200}]
-                    )
+                    motion_plan([{"file": "frames/000.png", "duration_ms": 1200}])
                 ),
                 encoding="utf-8",
             )
@@ -35,9 +33,7 @@ class DoctorTests(unittest.TestCase):
     def test_motion_diagnosis_rejects_ambiguous_reference_variant(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             motion_path = Path(temporary) / "motion.json"
-            motion = motion_plan(
-                [{"file": "frames/000.png", "duration_ms": 1200}]
-            )
+            motion = motion_plan([{"file": "frames/000.png", "duration_ms": 1200}])
             motion["reference"] = {
                 "filename": "reference.png",
                 "sha256": "0" * 64,

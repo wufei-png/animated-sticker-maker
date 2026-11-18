@@ -27,10 +27,7 @@ def gif_encoding_evidence(
     validation: dict[str, object],
 ) -> dict[str, object]:
     """Keep encoded timeline facts separate from top-level technical checks."""
-    return {
-        field: validation[field]
-        for field in GIF_ENCODING_EVIDENCE_FIELDS
-    }
+    return {field: validation[field] for field in GIF_ENCODING_EVIDENCE_FIELDS}
 
 
 def inspect_png_frames(
@@ -96,23 +93,16 @@ def render_track_evidence(
         "render.frames",
     )
     durations = [int(entry["duration_ms"]) for entry in entries]
-    authored_total = sum(
-        int(entry["duration_ms"]) for entry in motion["frames"]
-    )
+    authored_total = sum(int(entry["duration_ms"]) for entry in motion["frames"])
     checks = {
         "frame_count_matches_ordered_entries": len(metrics) == len(entries),
         "duration_count_matches_frames": len(durations) == len(metrics),
-        "total_duration_matches_authored_keyframes": (
-            sum(durations) == authored_total
-        ),
+        "total_duration_matches_authored_keyframes": (sum(durations) == authored_total),
         "target_fps_matches_timeline": abs(
-            len(metrics)
-            - sum(durations) * int(render["target_fps"]) / 1000
+            len(metrics) - sum(durations) * int(render["target_fps"]) / 1000
         )
         <= 1,
-        "source_frames_are_rgba": all(
-            mode == "RGBA" for mode in source_modes
-        ),
+        "source_frames_are_rgba": all(mode == "RGBA" for mode in source_modes),
         "all_frames_match_expected_size": all(
             tuple(metric["size"]) == canvas for metric in metrics
         ),
@@ -151,9 +141,7 @@ def package_source_evidence(
         "frame_count_in_default_range": (
             DEFAULT_FRAME_RANGE[0] <= len(metrics) <= DEFAULT_FRAME_RANGE[1]
         ),
-        "source_frames_are_rgba": all(
-            mode == "RGBA" for mode in source_modes
-        ),
+        "source_frames_are_rgba": all(mode == "RGBA" for mode in source_modes),
         "all_frames_match_expected_size": all(
             tuple(metric["size"]) == canvas for metric in metrics
         ),
@@ -176,9 +164,7 @@ def package_source_evidence(
     render_metrics = None
     if isinstance(motion.get("render"), dict):
         render_checks, render_metrics = render_track_evidence(package, motion)
-        checks["render_track_technical_validation_pass"] = all(
-            render_checks.values()
-        )
+        checks["render_track_technical_validation_pass"] = all(render_checks.values())
     if inspect_sticker:
         sticker = package / "sticker.webp"
         try:
@@ -274,9 +260,7 @@ def validate_export_gif_evidence(
             allow_frame_collapse=allow_frame_collapse,
         )
     except (OSError, ValueError) as exc:
-        raise ValueError(
-            f"current GIF media failed validation: {exc}"
-        ) from exc
+        raise ValueError(f"current GIF media failed validation: {exc}") from exc
 
 
 def validate_preview_evidence(
@@ -292,9 +276,7 @@ def validate_preview_evidence(
             image_size = image.size
             metrics = alpha_metrics(image.convert("RGBA"))
     except OSError as exc:
-        raise ValueError(
-            f"current preview media is unreadable: {exc}"
-        ) from exc
+        raise ValueError(f"current preview media is unreadable: {exc}") from exc
     if image_format != "PNG":
         raise ValueError("exported preview must be PNG")
     if image_size != canvas:

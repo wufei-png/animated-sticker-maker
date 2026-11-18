@@ -30,8 +30,7 @@ LANGUAGE_TEXT: dict[str, dict[str, object]] = {
             "not validation evidence"
         ),
         "no_reviewable_media": (
-            "No reviewable media is available for this technically failed "
-            "artifact."
+            "No reviewable media is available for this technically failed artifact."
         ),
         "reference": "Reference",
         "verified_reference_image": "Verified reference image",
@@ -81,8 +80,7 @@ LANGUAGE_TEXT: dict[str, dict[str, object]] = {
         "source_path": "Source path",
         "ordered_frame": "Ordered frame",
         "render_frame_description": (
-            "Ordered pre-encode render evidence at the current playhead "
-            "position."
+            "Ordered pre-encode render evidence at the current playhead position."
         ),
         "encoded_frame_description": (
             "Decoded post-encode evidence from the current artifact. Use it "
@@ -150,8 +148,7 @@ LANGUAGE_TEXT: dict[str, dict[str, object]] = {
             ),
             "package_missing_title": "Encoded package unavailable",
             "package_missing_subtitle": (
-                "Technical validation failed before a usable sticker.webp "
-                "was produced."
+                "Technical validation failed before a usable sticker.webp was produced."
             ),
             "render_title": "Render track preview",
             "render_subtitle": (
@@ -334,9 +331,7 @@ LANGUAGE_TEXT: dict[str, dict[str, object]] = {
             "package_source": (
                 "编码后产物是审核依据：检查实际打包的 WebP；关键帧仅用于对照。"
             ),
-            "render_track": (
-                "编码前证据：检查打包或平台编码之前的有序 PNG 渲染序列。"
-            ),
+            "render_track": ("编码前证据：检查打包或平台编码之前的有序 PNG 渲染序列。"),
             "export_files": (
                 "平台导出物是审核依据：检查实际 GIF；所选来源轨道仅用于对照。"
             ),
@@ -347,17 +342,13 @@ LANGUAGE_TEXT: dict[str, dict[str, object]] = {
                 "从实际 sticker.webp 产物解码的帧；播放器控制编码后的真实结果。"
             ),
             "package_missing_title": "编码后贴纸包不可用",
-            "package_missing_subtitle": (
-                "技术验证在生成可用 sticker.webp 之前失败。"
-            ),
+            "package_missing_subtitle": ("技术验证在生成可用 sticker.webp 之前失败。"),
             "render_title": "渲染轨道预览",
             "render_subtitle": (
                 "按声明顺序和时序展示渲染 PNG；这是编码前证据，不是编码交付物。"
             ),
             "export_title": "{platform} 导出物",
-            "export_subtitle": (
-                "从实际导出 GIF 解码的帧；播放器控制该平台衍生物。"
-            ),
+            "export_subtitle": ("从实际导出 GIF 解码的帧；播放器控制该平台衍生物。"),
         },
         "reference_labels": {
             "included": "包内参考图",
@@ -443,7 +434,9 @@ def translation_key_paths(
 if translation_key_paths(LANGUAGE_TEXT["en"]) != translation_key_paths(
     LANGUAGE_TEXT["zh"]
 ):
-    raise RuntimeError("English and Chinese review translations must have identical keys")
+    raise RuntimeError(
+        "English and Chinese review translations must have identical keys"
+    )
 
 
 def language_text(language: str) -> dict[str, object]:

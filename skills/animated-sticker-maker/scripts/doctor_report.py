@@ -148,9 +148,7 @@ def diagnose_export_media(
         isinstance(canvas, list)
         and len(canvas) == 2
         and all(
-            isinstance(value, int)
-            and not isinstance(value, bool)
-            and value > 0
+            isinstance(value, int) and not isinstance(value, bool) and value > 0
             for value in canvas
         )
     ):
@@ -192,17 +190,14 @@ def diagnose_export_media(
         if actual_validation is not None:
             diagnosis.boolean(
                 "export.gif.validation-evidence",
-                gif.get("validation")
-                == gif_encoding_evidence(actual_validation),
+                gif.get("validation") == gif_encoding_evidence(actual_validation),
                 "GIF validation evidence matches current media",
                 "GIF validation evidence does not match current media",
                 report_path,
             )
             technical = report.get("technical_validation")
             technical_checks = (
-                technical.get("checks")
-                if isinstance(technical, dict)
-                else None
+                technical.get("checks") if isinstance(technical, dict) else None
             )
             diagnosis.boolean(
                 "export.gif.technical-checks",

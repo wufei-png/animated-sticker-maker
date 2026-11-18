@@ -88,7 +88,9 @@ def validation_status(report: dict[str, object]) -> dict[str, object]:
     technical = report.get("technical_validation")
     visual = report.get("visual_validation")
     return {
-        "aggregate": report.get("status") if isinstance(report.get("status"), str) else None,
+        "aggregate": report.get("status")
+        if isinstance(report.get("status"), str)
+        else None,
         "technical": technical.get("status") if isinstance(technical, dict) else None,
         "visual": visual.get("status") if isinstance(visual, dict) else None,
         "deliverable_ready": report.get("deliverable_ready") is True,
@@ -103,9 +105,7 @@ def _validated_policy_overrides(
     if not isinstance(overrides, list):
         raise ValueError("report.policy_overrides must be an array")
     if report.get("artifact_scope") != "package_source" and overrides:
-        raise ValueError(
-            "only package_source reports may declare policy_overrides"
-        )
+        raise ValueError("only package_source reports may declare policy_overrides")
 
     overridden_checks: set[str] = set()
     for index, override in enumerate(overrides):
@@ -123,21 +123,16 @@ def _validated_policy_overrides(
             )
         check_id = override.get("check_id")
         if check_id not in PACKAGE_POLICY_OVERRIDES:
-            raise ValueError(
-                f"policy_overrides[{index}].check_id is not overridable"
-            )
+            raise ValueError(f"policy_overrides[{index}].check_id is not overridable")
         if check_id in overridden_checks:
             raise ValueError("policy_overrides check_id values must be unique")
         specification = PACKAGE_POLICY_OVERRIDES[str(check_id)]
         if override.get("source") != specification["source"]:
             raise ValueError(
-                f"policy_overrides[{index}].source must be "
-                f"{specification['source']!r}"
+                f"policy_overrides[{index}].source must be {specification['source']!r}"
             )
         if override.get("default_range") != specification["default_range"]:
-            raise ValueError(
-                f"policy_overrides[{index}].default_range is inconsistent"
-            )
+            raise ValueError(f"policy_overrides[{index}].default_range is inconsistent")
         actual = report.get(str(specification["actual_field"]))
         if override.get("actual") != actual:
             raise ValueError(
@@ -238,7 +233,9 @@ def validate_report_state(
     else:
         expected_status = "pending_visual_validation"
     if report.get("status") != expected_status:
-        raise ValueError(f"report.status must be {expected_status!r} for its validation state")
+        raise ValueError(
+            f"report.status must be {expected_status!r} for its validation state"
+        )
     expected_ready = expected_status == "pass"
     if report.get("deliverable_ready") is not expected_ready:
         raise ValueError(
@@ -310,9 +307,7 @@ def _validate_technical_evidence(
         )
         # The package contains normalized RGBA PNGs, so the original input mode
         # recorded during packaging cannot be reconstructed from the artifact.
-        actual_checks["source_frames_are_rgba"] = typed_checks[
-            "source_frames_are_rgba"
-        ]
+        actual_checks["source_frames_are_rgba"] = typed_checks["source_frames_are_rgba"]
         if typed_checks != actual_checks:
             raise ValueError(
                 "package technical_validation.checks do not match current media"
@@ -323,10 +318,7 @@ def _validate_technical_evidence(
             )
         frames = motion["frames"]
         frame_count = len(frames)
-        total_duration_ms = sum(
-            int(frame["duration_ms"])
-            for frame in frames
-        )
+        total_duration_ms = sum(int(frame["duration_ms"]) for frame in frames)
         for field, actual in (
             ("frame_count", frame_count),
             ("total_duration_ms", total_duration_ms),
@@ -394,14 +386,12 @@ def _validate_technical_evidence(
         overridden_checks = {
             str(override["check_id"])
             for override in overrides
-            if isinstance(override, dict)
-            and isinstance(override.get("check_id"), str)
+            if isinstance(override, dict) and isinstance(override.get("check_id"), str)
         }
         pre_encoding_checks = {
             key: value
             for key, value in actual_checks.items()
-            if key not in PACKAGE_WEBP_CHECK_IDS
-            and key != "sticker_is_readable"
+            if key not in PACKAGE_WEBP_CHECK_IDS and key != "sticker_is_readable"
         }
         pre_encoding_pass = all(
             passed or check_id in overridden_checks
@@ -410,8 +400,7 @@ def _validate_technical_evidence(
         expected_encoding = {
             "lossless": motion["resampling"] == "nearest",
             "alpha_guard_applied": bool(
-                pre_encoding_pass
-                and package_webp_alpha_guard_required(package, motion)
+                pre_encoding_pass and package_webp_alpha_guard_required(package, motion)
             ),
         }
         if report.get("webp_encoding") != expected_encoding:
@@ -426,8 +415,7 @@ def _validate_technical_evidence(
                 "target_fps": render["target_fps"],
                 "frame_count": len(render_frames),
                 "total_duration_ms": sum(
-                    int(frame["duration_ms"])
-                    for frame in render_frames
+                    int(frame["duration_ms"]) for frame in render_frames
                 ),
             }
         if report.get("render_track") != expected_render_summary:
@@ -450,32 +438,24 @@ def _validate_technical_evidence(
             raise ValueError("render report requires packaged render metadata")
         render_frames = render["frames"]
         actual_checks, actual_metrics = render_track_evidence(package, motion)
-        actual_checks["source_frames_are_rgba"] = typed_checks[
-            "source_frames_are_rgba"
-        ]
+        actual_checks["source_frames_are_rgba"] = typed_checks["source_frames_are_rgba"]
         if typed_checks != actual_checks:
             raise ValueError(
                 "render technical_validation.checks do not match current media"
             )
         if report.get("frames") != actual_metrics:
-            raise ValueError(
-                "render report frames do not match current render media"
-            )
+            raise ValueError("render report frames do not match current render media")
         expected_metadata = {
             "target_fps": render["target_fps"],
             "frame_count": len(render_frames),
             "total_duration_ms": sum(
-                int(frame["duration_ms"])
-                for frame in render_frames
+                int(frame["duration_ms"]) for frame in render_frames
             ),
         }
         if any(
-            report.get(field) != value
-            for field, value in expected_metadata.items()
+            report.get(field) != value for field, value in expected_metadata.items()
         ):
-            raise ValueError(
-                "render report metadata must match the packaged motion"
-            )
+            raise ValueError("render report metadata must match the packaged motion")
     elif scope == "export_files":
         if set(typed_checks) != EXPORT_GIF_CHECK_IDS:
             raise ValueError(
@@ -533,17 +513,11 @@ def _validate_export_metadata(
     if not isinstance(gif, dict):
         raise ValueError("export report must declare a gif object")
     gif_bytes = gif.get("bytes")
-    if (
-        not isinstance(gif_bytes, int)
-        or isinstance(gif_bytes, bool)
-        or gif_bytes <= 0
-    ):
+    if not isinstance(gif_bytes, int) or isinstance(gif_bytes, bool) or gif_bytes <= 0:
         raise ValueError("export report gif.bytes must be a positive integer")
     max_bytes = gif.get("max_bytes")
     if max_bytes is not None and (
-        not isinstance(max_bytes, int)
-        or isinstance(max_bytes, bool)
-        or max_bytes <= 0
+        not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or max_bytes <= 0
     ):
         raise ValueError("export report gif.max_bytes must be null or positive")
 
@@ -562,9 +536,7 @@ def _validate_export_metadata(
             or isinstance(preview_max_bytes, bool)
             or preview_max_bytes <= 0
         ):
-            raise ValueError(
-                "export report preview.max_bytes must be null or positive"
-            )
+            raise ValueError("export report preview.max_bytes must be null or positive")
 
 
 def validate_report_binding(report_path: Path, report: dict[str, object]) -> None:
@@ -619,10 +591,7 @@ def validate_report_binding(report_path: Path, report: dict[str, object]) -> Non
         if preview.get("bytes") != preview_size:
             raise ValueError("export report preview.bytes does not match its file")
         preview_max_bytes = preview.get("max_bytes")
-        if (
-            isinstance(preview_max_bytes, int)
-            and preview_size > preview_max_bytes
-        ):
+        if isinstance(preview_max_bytes, int) and preview_size > preview_max_bytes:
             raise ValueError("exported preview exceeds preview.max_bytes")
     package = report_path.parent.parent.parent.resolve()
     motion = validate_motion(
@@ -664,7 +633,9 @@ def validate_report_binding(report_path: Path, report: dict[str, object]) -> Non
     if not isinstance(source_package_value, str) or not source_package_value:
         raise ValueError("export report must declare its source_package")
     if (report_path.parent / source_package_value).resolve() != package:
-        raise ValueError("export report source_package is inconsistent with its location")
+        raise ValueError(
+            "export report source_package is inconsistent with its location"
+        )
     source_record = report.get("source_validation_report")
     if not isinstance(source_record, dict):
         raise ValueError("export report must bind its source validation report")
@@ -675,7 +646,9 @@ def validate_report_binding(report_path: Path, report: dict[str, object]) -> Non
     if (report_path.parent / source_report_value).resolve() != source_report_path:
         raise ValueError("source validation report path is inconsistent")
     if not source_report_path.is_file():
-        raise FileNotFoundError(f"source validation report not found: {source_report_path}")
+        raise FileNotFoundError(
+            f"source validation report not found: {source_report_path}"
+        )
     if source_record.get("sha256") != sha256_path(source_report_path):
         raise ValueError("source validation report changed after export")
     source_report = _load_json_object(source_report_path, "source validation report")
@@ -702,7 +675,10 @@ def validate_report_binding(report_path: Path, report: dict[str, object]) -> Non
     if frame_track not in {"keyframes", "render"}:
         raise ValueError("export report frame_track must be 'keyframes' or 'render'")
     if frame_track == "keyframes":
-        if report.get("track_validation") is not None or report.get("track_report") is not None:
+        if (
+            report.get("track_validation") is not None
+            or report.get("track_report") is not None
+        ):
             raise ValueError(
                 "keyframe export report must not declare render-track validation"
             )

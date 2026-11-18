@@ -54,7 +54,9 @@ def parse_size(value: str) -> tuple[int, int]:
 
 def parse_fps_candidates(value: str) -> tuple[int, ...]:
     try:
-        candidates = tuple(int(item.strip()) for item in value.split(",") if item.strip())
+        candidates = tuple(
+            int(item.strip()) for item in value.split(",") if item.strip()
+        )
     except ValueError as exc:
         raise argparse.ArgumentTypeError(
             "fps candidates must be comma-separated positive integers"
@@ -164,9 +166,13 @@ def main() -> None:
     parser.add_argument("--output", type=Path)
     parser.add_argument("--preview-output", type=Path)
     parser.add_argument("--preview-max-bytes", type=int)
-    parser.add_argument("--preview-frame", default="auto", help="'auto' or a 1-based frame number")
+    parser.add_argument(
+        "--preview-frame", default="auto", help="'auto' or a 1-based frame number"
+    )
     parser.add_argument("--report-output", type=Path)
-    parser.add_argument("--alpha-threshold", type=int, default=96, choices=range(1, 255))
+    parser.add_argument(
+        "--alpha-threshold", type=int, default=96, choices=range(1, 255)
+    )
     parser.add_argument("--spec-url", type=parse_spec_url, required=True)
     parser.add_argument("--verified-on", type=parse_verified_on, required=True)
     parser.add_argument("--allow-unvalidated", action="store_true")
@@ -247,7 +253,9 @@ def main() -> None:
     if resampling not in RESAMPLING_FILTERS:
         raise ValueError("motion.resampling must be 'lanczos' or 'nearest'")
     resized = [fit_frame(frame, args.size, str(resampling)) for frame in frames]
-    with tempfile.TemporaryDirectory(prefix=".export-staging-", dir=export_dir) as temporary:
+    with tempfile.TemporaryDirectory(
+        prefix=".export-staging-", dir=export_dir
+    ) as temporary:
         staging = Path(temporary)
         staged_output = staging / output.name
         (
@@ -295,7 +303,9 @@ def main() -> None:
                         "--preview-frame must be 'auto' or a 1-based frame number"
                     ) from exc
                 if not 0 <= preview_index < len(exported_frames):
-                    raise ValueError("--preview-frame is outside the exported frame range")
+                    raise ValueError(
+                        "--preview-frame is outside the exported frame range"
+                    )
                 preview_frame = exported_frames[preview_index]
                 preview_frame_source = "exported"
             staged_preview = staging / preview_output.name
@@ -324,10 +334,7 @@ def main() -> None:
         if staged_preview is not None and preview_output is not None:
             artifact_entries.append((preview_output.name, staged_preview))
         artifact_fingerprint = fingerprint_files(
-            [
-                (f"artifact:{name}", path)
-                for name, path in artifact_entries
-            ]
+            [(f"artifact:{name}", path) for name, path in artifact_entries]
         )
         report = {
             "schema_version": REPORT_SCHEMA_VERSION,
@@ -397,14 +404,9 @@ def main() -> None:
         if staged_preview is not None and preview_output is not None:
             staged_entries.append((staged_preview, preview_output))
         staged_entries.append((staged_report, report_path))
-        new_artifacts = {
-            final.resolve()
-            for _, final in staged_entries
-        }
+        new_artifacts = {final.resolve() for _, final in staged_entries}
         removals = tuple(
-            path
-            for path in previous_artifacts
-            if path.resolve() not in new_artifacts
+            path for path in previous_artifacts if path.resolve() not in new_artifacts
         )
         commit_staged_files(staged_entries, staging, removals)
     print(f"Wrote {output} ({gif_bytes} bytes, {colors} colors)")
